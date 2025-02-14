@@ -1,2 +1,3 @@
 # EGGS
-Evolutionary Genotype Generalizer for Samples
+
+Evolutionary Genotype Generalizer for Samples (EGGS)
