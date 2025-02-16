@@ -1,6 +1,6 @@
 # EGGS
 
-Evolutionary Genotype Generalizer for Samples (EGGS) is a tool to remove phase, remove polarization, and 
+Evolutionary Genotype Generalizer for Samples (EGGS) is a tool to remove phase, remove polarization for biallelic sites, and 
 introduce missing data in genotypes. EGGS accepts variants in either VCF or ms-style replicates and produces
 VCF output. For ms-style replicates, EGGS produces one VCF file per replicate.
 
@@ -27,8 +27,9 @@ Options:
                                         Default 0.
    -o,--out         STR             Basename for output files.
                                         Default "rep" prefix for multiple ms-style replicates.
-   -u,--unphased                    The phase is removed from genotypes with a probability of 50%.
-   -p,--unpolarized                 The records will be unpolarized with a probability of 50%.
-   -s,--single                      Each sample contains one lineage. Always unphased; ignores -u.
-   -c,--compress                    The resulting files are bgzipped compressed.
+   -u,--unphased                    Left and right genotypes are swapped with a probability of 50%.
+   -p,--unpolarized                 Biallelic sites' ancestral and derived alleles with a probability of 50%.
+   -s,--single                      Each sample contains one lineage. 
+                                        ms-style input only. Ignores -u.
+   -c,--compress                    Only used if -o is set. The resulting files are gzipped compressed.
 ```

@@ -10,17 +10,13 @@ CC?=gcc
 CFLAGS = -c -Wall -g
 LFLAGS = -g -o
 
-bin/eggs: lib src/Main.o
+bin/eggs: src/main.o
 	mkdir -p bin
-	$(CC) $(LFLAGS) bin/eggs src/main.o lib/*.o -lz -lm 
+	$(CC) $(LFLAGS) bin/eggs src/main.o -lz -lm 
 
-src/Main.o:
+src/main.o:
 	$(CC) $(CFLAGS) src/main.c -o src/main.o
-
-.PHONY: lib
-lib: 
-	$(CC) $(CFLAGS) lib/bgzf.c -o lib/bgzf.o
 
 .PHONY: clean
 clean:
-	rm lib/*.o src/Main.o bin/eggs
+	rm src/main.o bin/eggs
