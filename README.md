@@ -1,7 +1,7 @@
 # EGGS
 
 Evolutionary Genotype Generalizer for Samples (EGGS) is a tool to remove phase, remove polarization for biallelic sites, and 
-introduce missing data in genotypes. EGGS accepts variants in either VCF or ms-style replicates and produces
+introduce missing alleles in genotypes. EGGS accepts variants in either VCF or ms-style replicates and produces
 VCF output. For ms-style replicates, EGGS produces one VCF file per replicate.
 
 ## Building EGGS
@@ -17,6 +17,11 @@ make
 ## Options
 
 ```
+EGGS v1.0 February 2025
+-----------------------
+Written by T. Quinn Smith
+Principal Investigator: Zachary A. Szpiech
+The Pennsylvania State University
 Usage: eggs [-upsc] [-l length] [-n number_of_samples] [-m prob_missing_allele] [-o out_basename]
 Options:
    -l,--length      INT             Sets length of segment in number of base pairs for ms-replicates. 

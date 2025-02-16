@@ -27,19 +27,121 @@ KSTREAM_INIT(gzFile, gzread, BUFFER_SIZE)
 // Print our booleans.
 #define PRINT_BOOL(X) (X ? "true" : "false")
 
+// Same logic at the ms macros.
+//  There is a memory leak here. leftGeno and rightGeno are not being freed, and when
+//  they are, we get a malloc error.
+//  Will profile with Valgrind later.
+#define VCF(printer) ({\
+    while (!ks_eof(fp_in) && strncmp(ks_str(buffer), "#CHROM", 5) != 0) { \
+        printer(fp_out, "%s\n", ks_str(buffer)); \
+        ks_getuntil(fp_in, '\n', buffer, 0); \
+    } \
+    if (ks_eof(fp_in)) return; \
+    if (!out) out = "stdout"; \
+    printer(fp_out, "##eggs=<missing=%lf,unphased=%s,unpolarized=%s,compress=%s,out=%s>\n", missing, PRINT_BOOL(unphased), PRINT_BOOL(unpolarized), PRINT_BOOL(compress), out); \
+    printer(fp_out, "%s\n", ks_str(buffer)); \
+    kstring_t* temp = NULL; \
+    kstring_t* leftGeno = init_kstring(NULL); \
+    kstring_t* rightGeno = init_kstring(NULL); \
+    int numAlts, slashIndex, colonIndex, numTok; \
+    bool switchStates; \
+    while(!ks_eof(fp_in)) { \
+        ks_getuntil(fp_in, '\n', buffer, 0); \
+        ks_str(buffer)[ks_len(buffer)] = '\0'; \
+        numAlts = 1; slashIndex = -1; colonIndex = 0, numTok = 1; \
+        switchStates = false; \
+        char* token = strtok(ks_str(buffer), "\t"); \
+        while (token != NULL) { \
+            if (numTok == 5) { \
+                for (int j = 0; j < strlen(token); j++) \
+                    if (token[j] == ',') \
+                        numAlts++; \
+                if (numAlts == 2 && unpolarized && rand() < 0.5) \
+                    switchStates = true; \
+                printer(fp_out, "\t%s", token); \
+            } else if (numTok > 9) { \
+                colonIndex = strlen(token); \
+                for (int j = 0; j < strlen(token); j++) { \
+                    if (token[j] == '/' || token[j] == '|') \
+                        slashIndex = j; \
+                    if (token[j] == ':') { \
+                        colonIndex = j; \
+                        break; \
+                    } \
+                } \
+                ks_overwriten(token, slashIndex, leftGeno); \
+                ks_overwriten(token + slashIndex + 1, (colonIndex - slashIndex - 1), rightGeno); \
+                if (switchStates) { \
+                    if (ks_str(leftGeno)[0] == '0') \
+                        ks_str(leftGeno)[0] = '1'; \
+                    if (ks_str(rightGeno)[0] == '0') \
+                        ks_str(rightGeno)[0] = '1'; \
+                    if (ks_str(leftGeno)[0] == '1') \
+                        ks_str(leftGeno)[0] = '0'; \
+                    if (ks_str(rightGeno)[0] == '1') \
+                        ks_str(rightGeno)[0] = '0'; \
+                } \
+                printer(fp_out, "\t"); \
+                if (unphased) { \
+                    if (rand() < 0.5) { temp = leftGeno; leftGeno = rightGeno; rightGeno = leftGeno; } \
+                    if (missing > 0) { \
+                        if (rand() < missing) printer(fp_out, "."); else printer(fp_out, "%s", ks_str(leftGeno)); \
+                        if (rand() < missing) printer(fp_out, "/."); else printer(fp_out, "/%s", ks_str(rightGeno)); \
+                    } else { printer(fp_out, "%s/%s", ks_str(leftGeno), ks_str(rightGeno)); } \
+                } else { \
+                    if (missing > 0) { \
+                        if (rand() < missing) printer(fp_out, "."); else printer(fp_out, "%s", ks_str(leftGeno)); \
+                        if (rand() < missing) printer(fp_out, "|."); else printer(fp_out, "|%s", ks_str(rightGeno)); \
+                    } else { printer(fp_out, "%s|%s", ks_str(leftGeno), ks_str(rightGeno)); } \
+                } \
+                if (token[colonIndex] == ':') \
+                    printer(fp_out, "%s", token + colonIndex); \
+            } else { \
+                if (numTok == 1) \
+                    printer(fp_out, "%s", token); \
+                else \
+                    printer(fp_out, "\t%s", token); \
+            } \
+            numTok++; \
+            token = strtok(NULL, "\t"); \
+        } \
+        printer(fp_out, "\n"); \
+    } \
+})
+
 // Parse input in VCF format.
 // Accepts:
-//  BGZF* fp_in -> The input.
+//  kstream_t* fp_in -> The input.
 //  kstring_t* buffer -> A buffer to read in the input.
-//  int numSamples -> The number of numSamples to output.
 //  double missing -> Probability of a missing genotype.
 //  char* out -> The output basename.
 //  bool unphased -> If sites should be unphased.
 //  bool unpolarized -> If biallelic sites should be unpolarized.
 //  bool compress -> If the resulting files should be compressed.
 // Returns: void.
-void parse_vcf(kstream_t* fp_in, kstring_t* buffer, int numSamples, double missing, char* out, bool unphased, bool unpolarized, bool compress) {
-
+void parse_vcf(kstream_t* fp_in, kstring_t* buffer, double missing, char* out, bool unphased, bool unpolarized, bool compress) {
+    // If we are printing to a file or stdout.
+    if (out) {
+        kstring_t* outName = init_kstring(out);
+        // If it is gzipped.
+        if (compress) {
+            kputs(".vcf.gz", outName);
+            gzFile fp_out = gzopen(ks_str(outName), "w");
+            VCF(gzprintf);
+            gzclose(fp_out);
+        } else {
+            kputs(".vcf", outName);
+            FILE* fp_out = fopen(ks_str(outName), "w");
+            VCF(fprintf);
+            fclose(fp_out);
+        }
+        destroy_kstring(outName);
+    } else {
+        int fd_out = fileno(stdout);
+        FILE* fp_out = fdopen(fd_out, "w");
+        VCF(fprintf);
+        fclose(fp_out);
+    }
 }
 
 // We seperate the cases of haploids and diploids for readability.
@@ -49,15 +151,15 @@ void parse_vcf(kstream_t* fp_in, kstring_t* buffer, int numSamples, double missi
 //  Then, we introduce missing genotypes.
 
 // We define a macro for the haploid case.
-#define HAPLOID(printer) ({\
+#define HAPLOID_MS(printer) ({\
     printer (fp_out, "##fileformat=VCFv4.2\n"); \
-    printer (fp_out, "##numSamples=%d\n", numSamples); \
-    printer (fp_out, "##missing=%lf\n", missing); \
-    printer (fp_out, "##unphased=%s\n", PRINT_BOOL(unphased)); \
-    printer (fp_out, "##unpolarized=%s\n", PRINT_BOOL(unpolarized)); \
-    printer (fp_out, "##single=%s\n", PRINT_BOOL(single)); \
-    printer (fp_out, "##compress=%s\n", PRINT_BOOL(compress)); \
-    printer (fp_out, "##out=%s\n", out); \
+    printer (fp_out, "##eggs=<numSamples=%d", numSamples); \
+    printer (fp_out, ",missing=%lf", missing); \
+    printer (fp_out, ",unphased=%s", PRINT_BOOL(unphased)); \
+    printer (fp_out, ",unpolarized=%s", PRINT_BOOL(unpolarized)); \
+    printer (fp_out, ",single=%s", PRINT_BOOL(single)); \
+    printer (fp_out, ",compress=%s", PRINT_BOOL(compress)); \
+    printer (fp_out, ",out=%s>\n", out); \
     printer (fp_out, "##contig=<ID=chr1,length=%d>\n", length); \
     printer (fp_out, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"); \
     for (int i = 0; i < numSamples; i++) { \
@@ -89,15 +191,15 @@ void parse_vcf(kstream_t* fp_in, kstring_t* buffer, int numSamples, double missi
 })
 
 // We define a macro for the diploid case.
-#define DIPLOID(printer) ({\
+#define DIPLOID_MS(printer) ({\
     printer (fp_out, "##fileformat=VCFv4.2\n"); \
-    printer (fp_out, "##numSamples=%d\n", numSamples); \
-    printer (fp_out, "##missing=%lf\n", missing); \
-    printer (fp_out, "##unphased=%s\n", PRINT_BOOL(unphased)); \
-    printer (fp_out, "##unpolarized=%s\n", PRINT_BOOL(unpolarized)); \
-    printer (fp_out, "##single=%s\n", PRINT_BOOL(single)); \
-    printer (fp_out, "##compress=%s\n", PRINT_BOOL(compress)); \
-    printer (fp_out, "##out=%s\n", out); \
+    printer (fp_out, "##eggs=<numSamples=%d", numSamples); \
+    printer (fp_out, ",missing=%lf", missing); \
+    printer (fp_out, ",unphased=%s", PRINT_BOOL(unphased)); \
+    printer (fp_out, ",unpolarized=%s", PRINT_BOOL(unpolarized)); \
+    printer (fp_out, ",single=%s", PRINT_BOOL(single)); \
+    printer (fp_out, ",compress=%s", PRINT_BOOL(compress)); \
+    printer (fp_out, ",out=%s>\n", out); \
     printer (fp_out, "##contig=<ID=chr1,length=%d>\n", length); \
     printer (fp_out, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"); \
     for (int i = 0; i < numSamples / 2; i++) { \
@@ -160,12 +262,13 @@ void parse_ms_replicate(bool isEOF, int numRep, char* out, int length, bool unph
     bool switchStates = false; // If we unpolarize switch the allelic states.
     
     // If there is one replicate and no output filename, we print to stdout.
-    if (isEOF && numRep == 1) {
+    if (isEOF && numRep == 1 && !out) {
+        out = "stdout";
         FILE* fp_out = fdopen(fileno(stdout), "w");
         if (single) {
-            HAPLOID(fprintf);
+            HAPLOID_MS(fprintf);
         } else {
-            DIPLOID(fprintf);
+            DIPLOID_MS(fprintf);
         }
         fclose(fp_out);
         return;
@@ -184,9 +287,9 @@ void parse_ms_replicate(bool isEOF, int numRep, char* out, int length, bool unph
         } 
         gzFile fp_out = gzopen(ks_str(outName), "w");
         if (single) {
-            HAPLOID(gzprintf);
+            HAPLOID_MS(gzprintf);
         } else {
-            DIPLOID(gzprintf);
+            DIPLOID_MS(gzprintf);
         }
        gzclose(fp_out);
     } else {
@@ -199,9 +302,9 @@ void parse_ms_replicate(bool isEOF, int numRep, char* out, int length, bool unph
         } 
         FILE* fp_out = fopen(ks_str(outName), "w");
         if (single) {
-            HAPLOID(fprintf);
+            HAPLOID_MS(fprintf);
         } else {
-            DIPLOID(fprintf);
+            DIPLOID_MS(fprintf);
         }
         fclose(fp_out);
     }
@@ -232,7 +335,10 @@ void parse_ms(kstream_t* fp_in, kstring_t* buffer, int length, int numSamples, d
     // Eat lines until "segsites:" is encountered.
     do {
         ks_getuntil(fp_in, '\n', buffer, 0);
-    } while (strncmp(ks_str(buffer), "segsites:", 9) != 0);
+    } while (!ks_eof(fp_in) && strncmp(ks_str(buffer), "segsites:", 9) != 0);
+
+    if (ks_eof(fp_in))
+        return;
 
     int numReplicate = 1;
 
@@ -313,11 +419,16 @@ void parse_ms(kstream_t* fp_in, kstring_t* buffer, int length, int numSamples, d
 
 }
 
-// Print the help menu for msToVCF.
+// Print the help menu for EGGS.
 // Accepts: void.
 // Returns: void.
 void print_help() {
     printf("\n");
+    printf("EGGS v1.0 February 2025\n");
+    printf("----------------------\n\n");
+    printf("Written by T. Quinn Smith\n");
+    printf("Principal Investigator: Zachary A. Szpiech\n");
+    printf("The Pennsylvania State University\n\n");
     printf("Usage: eggs [-upsch] [-l length] [-n number_of_numSamples] [-m prob_missing_allele] [-o out_basename]\n");
     printf("Options:\n");
     printf("    -l,--length     INT             Sets length of segment in number of base pairs for ms-replicates.\n");
@@ -356,7 +467,7 @@ int main(int argc, char** argv) {
     srand(time(NULL));
 
     // Single character aliases for long options.
-    const char *opt_str = "huvscl:n:m:o:";
+    const char *opt_str = "huvspcl:n:m:o:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -409,7 +520,7 @@ int main(int argc, char** argv) {
     //  Otherwise, we assume it is ms-style.
     ks_getuntil(fp_in, '\n', buffer, 0);
     if (strncmp(ks_str(buffer), "##fileformat=VCF", 16) == 0) {
-        parse_vcf(fp_in, buffer, numSamples, missing, out, unphased, unpolarized, single, compress);
+        parse_vcf(fp_in, buffer, missing, out, unphased, unpolarized, compress);
     } else {
         parse_ms(fp_in, buffer, length, numSamples, missing, out, unphased, unpolarized, single, compress);
     }
