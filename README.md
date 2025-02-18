@@ -32,9 +32,9 @@ Options:
                                         Default 0.
    -o,--out         STR             Basename for output files.
                                         Default "rep" prefix for multiple ms-style replicates.
-   -u,--unphased                    Left and right genotypes are swapped with a probability of 50%.
-   -p,--unpolarized                 Biallelic sites' ancestral and derived alleles with a probability of 50%.
+   -u,--unphased                    Left and right genotypes are swapped with a probability of 0.5
+   -p,--unpolarized                 Biallelic site alleles swapped with a probability of 0.5.
    -s,--single                      Each sample contains one lineage. 
                                         ms-style input only. Ignores -u.
-   -c,--compress                    Only used if -o is set. The resulting files are gzipped compressed.
+   -c,--compress                    Ouput is gzipped compressed.
 ```

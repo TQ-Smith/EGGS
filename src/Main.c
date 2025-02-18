@@ -138,9 +138,15 @@ void parse_vcf(kstream_t* fp_in, kstring_t* buffer, double missing, char* out, b
         destroy_kstring(outName);
     } else {
         int fd_out = fileno(stdout);
-        FILE* fp_out = fdopen(fd_out, "w");
-        VCF(fprintf);
-        fclose(fp_out);
+        if (compress) {
+            gzFile fp_out = gzdopen(fd_out, "w");
+            VCF(gzprintf);
+            gzclose(fp_out);
+        } else {
+            FILE* fp_out = fdopen(fd_out, "w");
+            VCF(fprintf);
+            fclose(fp_out);
+        }
     }
 }
 
@@ -264,13 +270,23 @@ void parse_ms_replicate(bool isEOF, int numRep, char* out, int length, bool unph
     // If there is one replicate and no output filename, we print to stdout.
     if (isEOF && numRep == 1 && !out) {
         out = "stdout";
-        FILE* fp_out = fdopen(fileno(stdout), "w");
-        if (single) {
-            HAPLOID_MS(fprintf);
+        if (compress) {
+            gzFile fp_out = gzdopen(fileno(stdout), "w");
+            if (single) {
+                HAPLOID_MS(gzprintf);
+            } else {
+                DIPLOID_MS(gzprintf);
+            }
+            gzclose(fp_out);
         } else {
-            DIPLOID_MS(fprintf);
-        }
-        fclose(fp_out);
+            FILE* fp_out = fdopen(fileno(stdout), "w");
+            if (single) {
+                HAPLOID_MS(fprintf);
+            } else {
+                DIPLOID_MS(fprintf);
+            }
+            fclose(fp_out);
+        } 
         return;
     }
 
@@ -440,10 +456,10 @@ void print_help() {
     printf("    -o,--out        STR             Basename for output files.\n");
     printf("                                        Default \"rep\" prefix for multiple ms-style replicates.\n");
     printf("    -u,--unphased                   Left and right genotypes are swapped with a probability of 0.5\n");
-    printf("    -p,--unpolarized                Biallelic sites' ancestral and derived alleles with a probability of 0.5\n");
+    printf("    -p,--unpolarized                Biallelic site alleles swapped with a probability of 0.5\n");
     printf("    -s,--single                     Each sample contains one lineage.\n");
     printf("                                        ms-style input only. Ignores -u.\n");
-    printf("    -c,--compress                   Only used if -o is set. The resulting files are gzipped compressed.\n");
+    printf("    -c,--compress                   Ouput is gzipped compressed.\n");
     printf("    -h,--help                       Print help.\n");
     printf("\n");
 }
