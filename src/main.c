@@ -28,9 +28,9 @@ KSTREAM_INIT(gzFile, gzread, BUFFER_SIZE)
 #define PRINT_BOOL(X) (X ? "true" : "false")
 
 // Same logic at the ms macros.
-//  There is a memory leak here. leftGeno and rightGeno are not being freed, and when
-//  they are, we get a malloc error.
-//  Will profile with Valgrind later.
+//  We print the non-genotype fields, and then, perform the same operations 
+//  on the genotypes. We do not switch the REF/ALT allele for biallelic loci
+//  when removing phase, because '.' is a valid ALT allele but not a valid REF allele.
 #define VCF(printer) ({\
     while (!ks_eof(fp_in) && strncmp(ks_str(buffer), "#CHROM", 5) != 0) { \
         printer(fp_out, "%s\n", ks_str(buffer)); \
@@ -70,7 +70,7 @@ KSTREAM_INIT(gzFile, gzread, BUFFER_SIZE)
                     } \
                 } \
                 ks_overwriten(token, slashIndex, leftGeno); \
-                ks_overwriten(token + slashIndex + 1, (colonIndex - slashIndex - 1), rightGeno); \
+                ks_overwriten(token + slashIndex + 1, (colonIndex - slashIndex), rightGeno); \
                 if (switchStates) { \
                     if (ks_str(leftGeno)[0] == '0') \
                         ks_str(leftGeno)[0] = '1'; \
@@ -107,6 +107,8 @@ KSTREAM_INIT(gzFile, gzread, BUFFER_SIZE)
         } \
         printer(fp_out, "\n"); \
     } \
+    destroy_kstring(leftGeno); \
+    destroy_kstring(rightGeno); \
 })
 
 // Parse input in VCF format.
