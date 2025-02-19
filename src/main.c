@@ -45,9 +45,10 @@ KSTREAM_INIT(gzFile, gzread, BUFFER_SIZE)
     kstring_t* rightGeno = init_kstring(NULL); \
     int numAlts, slashIndex, colonIndex, numTok; \
     bool switchStates; \
-    while(!ks_eof(fp_in)) { \
+    while(true) { \
         ks_getuntil(fp_in, '\n', buffer, 0); \
-        ks_str(buffer)[ks_len(buffer)] = '\0'; \
+        if (ks_eof(fp_in)) \
+            break; \
         numAlts = 1; slashIndex = -1; colonIndex = 0, numTok = 1; \
         switchStates = false; \
         char* token = strtok(ks_str(buffer), "\t"); \
@@ -300,8 +301,9 @@ void parse_ms_replicate(bool isEOF, int numRep, char* out, int length, bool unph
             outName -> s = calloc(strlen(out) + ((int) log10(numRep + 1.0) + 1) + 12, sizeof(char));
             sprintf(ks_str(outName), "%s_rep%d.vcf.gz\0", out, numRep);
         } else {
+            // Without an output name we use "rep#"
             outName -> s = calloc(((int) log10(numRep + 1.0) + 1) + 12, sizeof(char));
-            sprintf(ks_str(outName), "%rep%d.vcf.gz\0", numRep);
+            sprintf(ks_str(outName), "rep%d.vcf.gz\0", numRep);
         } 
         gzFile fp_out = gzopen(ks_str(outName), "w");
         if (single) {
@@ -316,7 +318,7 @@ void parse_ms_replicate(bool isEOF, int numRep, char* out, int length, bool unph
             sprintf(ks_str(outName), "%s_rep%d.vcf\0", out, numRep);
         } else {
             outName -> s = calloc(((int) log10(numRep + 1.0) + 1) + 9, sizeof(char));
-            sprintf(ks_str(outName), "%rep%d.vcf\0", numRep);
+            sprintf(ks_str(outName), "rep%d.vcf\0", numRep);
         } 
         FILE* fp_out = fopen(ks_str(outName), "w");
         if (single) {
