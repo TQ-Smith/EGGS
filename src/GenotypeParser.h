@@ -29,7 +29,7 @@ typedef struct Record {
     int numAlleles;
     int numSamples;
     Genotype_t* genotypes;
-    struct Record* next_record;
+    struct Record* nextRecord;
 } Record_t;
 
 typedef struct {
@@ -50,9 +50,11 @@ InputStream_t* init_input_stream(FILE* source);
 
 void destroy_input_stream(InputStream_t* inputStream);
 
-void get_next_vcf_record(Record_t* record, InputStream_t* inputStream);
+Replicate_t* init_vcf_replicate(InputStream_t* inputStream);
 
-Replicate_t* parse_vcf(InputStream_t* inputStream);
+bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream);
+
+void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream);
 
 Replicate_t* parse_ms(InputStream_t* inputStream);
 
