@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <ketopt.h>
 #include <unistd.h>
+#include <kstring.h>
 
 void print_help() {
     printf("\n");
@@ -17,14 +18,17 @@ void print_help() {
     printf("    -h,--help                       Print help.\n");
     printf("    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
     printf("    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
-    printf("    -s,--pseudohap                  Pseudohaplotize all samples.\n");
+    printf("    -s,--pseudohap                  Pseudohaploidize all samples.\n");
+    printf("    -a,--hap                        Ignores -s. Haploidize all samples.\n");
     printf("    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     printf("    -m,--mask       STR             Filename of VCF to use as mask for missing genotypes.\n");
     printf("    -f,--fill       INT             Used with -m. If distance (in base-paris) between missing\n");
     printf("                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
-    printf("    -r,--random     DOUBLE,DOUBLE   The mean and standard error used to introduce missing genotypes.\n");
+    printf("    -r,--random     DOUBLE,DOUBLE   Ignores -m. The mean and standard error used to introduce missing genotypes.\n");
+    printf("                                        A number is drawn to determine proportion of missing sites for each sample.\n");
     printf("    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
     printf("                                        Default 1,000,000 base-pairs.\n");
+    printf("    -t,--threads    INT             Only used when -m is provided. Number of threads to use in Fourier computations.\n");
     printf("\n");
 }
 
@@ -33,11 +37,13 @@ static ko_longopt_t long_options[] = {
     {"unphase",         ko_no_argument,         'u'},
     {"unpolarize",      ko_no_argument,         'p'},
     {"pseudohap",       ko_no_argument,         's'},
+    {"hap",             ko_no_argument,         'a'},
     {"out",             ko_required_argument,   'o'},
     {"mask",            ko_required_argument,   'm'},
     {"fill",            ko_required_argument,   'f'},
     {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
+    {"threads",         ko_required_argument,   't'},
     {0, 0, 0}
 };
 
@@ -57,6 +63,11 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         destroy_eggs_configuration(eggsConfig);
         return -1;
     }
+    if (eggsConfig -> threads <= 0) {
+        fprintf(stderr, "-t must be given an integer >= 1. Exiting!\n");
+        destroy_eggs_configuration(eggsConfig);
+        return -1;
+    }
     if (eggsConfig -> randomMissing != NULL) {
         char* meanstd = strdup(eggsConfig -> randomMissing);
         char* next  = NULL;
@@ -69,7 +80,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         }
         eggsConfig -> stdMissing = strtod(next + 1, (char**) NULL);
         if (eggsConfig -> meanMissing < 0 || eggsConfig -> stdMissing <= 0) {
-            fprintf(stderr, "-r must be given a mean >= 0 and a stderr > 0 seperated by a comma. Exiting!\n");
+            fprintf(stderr, "-r must satisfy parameters for a beta distribution. Exiting!\n");
             free(meanstd);
             destroy_eggs_configuration(eggsConfig);
             return -1;
@@ -81,7 +92,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hupso:m:f:r:l:";
+    const char *opt_str = "hupaso:m:f:r:l:t:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -97,12 +108,15 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> unphase = false;
     eggsConfig -> unpolarize = false;
     eggsConfig -> pseudohap = false;
+    eggsConfig -> hap = false;
     eggsConfig -> outFile = NULL;
     eggsConfig -> maskFile = NULL;
     eggsConfig -> fill = -1;
     eggsConfig -> meanMissing = -1;
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = 1000000;
+    eggsConfig -> command = NULL;
+    eggsConfig -> threads = 1;
 
     options = KETOPT_INIT;
     while ((c = ketopt(&options, argc, argv, 1, opt_str, long_options)) >= 0) {
@@ -110,16 +124,24 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'u': eggsConfig -> unphase = true; break;
             case 'p': eggsConfig -> unpolarize = true; break;
             case 's': eggsConfig -> pseudohap = true; break;
+            case 'a': eggsConfig -> hap = true; break;
             case 'o': eggsConfig -> outFile = strdup(options.arg); break;
             case 'm': eggsConfig -> maskFile = strdup(options.arg); break;
             case 'f': eggsConfig -> fill = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
+            case 't': eggsConfig -> threads = (int) strtol(options.arg, (char**) NULL, 10); break;
         }
 	}
 
     if (check_configuration(eggsConfig) != 0)
         return NULL;
+
+    kstring_t* cmd = calloc(1, sizeof(kstring_t));
+    for (int i = 0; i < argc; i++) 
+        ksprintf(cmd, "%s ", argv[i]);
+    eggsConfig -> command = cmd -> s;
+    free(cmd);
 
     return eggsConfig;
 }
@@ -133,5 +155,7 @@ void destroy_eggs_configuration(EggsConfig_t* eggsConfig) {
         free(eggsConfig -> maskFile);
     if (eggsConfig -> randomMissing != NULL)
         free(eggsConfig -> randomMissing);
+    if (eggsConfig -> command != NULL)
+        free(eggsConfig -> command);
     free(eggsConfig);
 }

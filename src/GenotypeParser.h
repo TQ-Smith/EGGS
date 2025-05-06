@@ -56,7 +56,7 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream);
 
 void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream);
 
-Replicate_t* parse_ms(InputStream_t* inputStream);
+Replicate_t* parse_ms(InputStream_t* inputStream, int length);
 
 void destroy_record(Record_t* record);
 
