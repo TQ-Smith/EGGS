@@ -23,10 +23,10 @@ void print_help() {
     printf("    -a,--hap                        Precedence over -s. Haploidize all samples.\n");
     printf("    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     printf("    -m,--mask       STR             Filename of VCF to use as mask for missing genotypes.\n");
-    printf("    -f,--fill       INT             Used with -m. If distance (in base-paris) between missing\n");
-    printf("                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
     printf("    -r,--random     DOUBLE,DOUBLE   Ignores -m. The mean and standard error used to introduce missing genotypes.\n");
     printf("                                        A number is drawn to determine proportion of missing sites for each sample.\n");
+    printf("    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
+    printf("                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
     printf("    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
     printf("                                        Default 1,000,000 base-pairs.\n");
     printf("    -t,--threads    INT             Only used when -m is provided. Number of threads to use in Fourier computations.\n");

@@ -48,7 +48,7 @@ lib/gsl:
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/stream.c -o lib/gsl/stream.o
 
 lib/fftpack/fft.o:
-	$(CC) $(CFLAGS) lib/fftpack/fft.c -o lib/fftpack/fft.o
+	$(CC) $(CFLAGS) -DUSE_DOUBLE_PRECISION lib/fftpack/fft.c -o lib/fftpack/fft.o
 
 .PHONY: clean
 clean:

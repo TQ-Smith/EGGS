@@ -3,6 +3,7 @@
 #include "GenotypeParser.h"
 #include "time.h"
 #include "kstring.h"
+#include "Missingness.h"
 
 #define SWAP(a, b, temp) { a = temp; a = b; b = temp; }
 
