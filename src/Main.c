@@ -4,7 +4,7 @@
 #include "time.h"
 #include "kstring.h"
 
-#define SWAP(a, b, temp) (a = temp; a = b; b = temp)
+#define SWAP(a, b, temp) { a = temp; a = b; b = temp; }
 
 #define rand() ((float) rand() / (float) (RAND_MAX))
 
@@ -22,7 +22,6 @@ void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile f
 }
 
 void print_record(Record_t* record, EggsConfig_t* eggsConfig, gzFile fpOut) {
-    int temp = 0;
     if (record -> chrom == NULL) 
         gzprintf(fpOut, "chr1");
     else 
@@ -33,15 +32,54 @@ void print_record(Record_t* record, EggsConfig_t* eggsConfig, gzFile fpOut) {
     else 
         gzprintf(fpOut, "\t%s", record -> ref);
     if (record -> alts == NULL)
-        gzprintf(fpOut, "\tt");
+        gzprintf(fpOut, "\tT");
     else 
         gzprintf(fpOut, "\t%s", record -> alts);
     gzprintf(fpOut, "\t.\t.\t.\t.");
-    for (int i = 0; i < record -> numSamples; i++) 
-        if (record -> genotypes[i].isPhased)
-            gzprintf(fpOut, "\t%d|%d", record -> genotypes[i].left, record -> genotypes[i].right);
+
+    int tempInt = 0;
+    bool swapStates = false;
+    if (eggsConfig -> unpolarize && record -> numAlleles == 2 && rand() < 0.5)
+        swapStates = true;
+    for (int i = 0; i < record -> numSamples; i++) {
+
+        if (eggsConfig -> hap) {
+            record -> genotypes[i].right = MISSING;
+            eggsConfig -> pseudohap = false;
+        }
+
+        if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
+            record -> genotypes[i].isPhased = false;
+            if (rand() < 0.5)
+                SWAP(record -> genotypes[i].left, record -> genotypes[i].right, tempInt);
+        }
+
+        if (swapStates && record -> genotypes[i].left != MISSING)
+            record -> genotypes[i].left ^= 1;
+        if (swapStates && record -> genotypes[i].right != MISSING)
+            record -> genotypes[i].right ^= 1;
+
+        if (eggsConfig -> pseudohap && !eggsConfig -> hap) {
+            record -> genotypes[i].isPhased = false;
+            if (rand() < 0.5)
+                record -> genotypes[i].right = record -> genotypes[i].left;
+            else
+                record -> genotypes[i].left = record -> genotypes[i].right;
+        }
+
+        if (record -> genotypes[i].left == MISSING)
+            gzprintf(fpOut, "\t.");
         else 
-            gzprintf(fpOut, "\t%d/%d", record -> genotypes[i].left, record -> genotypes[i].right);
+            gzprintf(fpOut, "\t%d", record -> genotypes[i].left);
+        if (record -> genotypes[i].isPhased)
+            gzprintf(fpOut, "|");
+        else 
+            gzprintf(fpOut, "/");
+        if (record -> genotypes[i].right == MISSING)
+            gzprintf(fpOut, ".");
+        else 
+            gzprintf(fpOut, "%d", record -> genotypes[i].right);
+    }
     gzprintf(fpOut, "\n");
 }
 

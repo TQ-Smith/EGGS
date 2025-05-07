@@ -190,6 +190,7 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length) {
         temp -> genotypes = calloc(replicate -> numSamples, sizeof(Genotype_t));
         temp -> position = kv_A(positions, i);
         temp -> numSamples = replicate -> numSamples; 
+        temp -> numAlleles = 2;
         for (int j = 0; j < replicate -> numSamples; j++) {
             temp -> genotypes[j].isPhased = true;
             temp -> genotypes[j].left = kv_A(lineages, 2 * j)[i] - '0'; 

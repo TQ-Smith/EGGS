@@ -2,24 +2,25 @@
 #include "Interface.h"
 
 #include <stdio.h>
-#include <ketopt.h>
+#include "ketopt.h"
 #include <unistd.h>
-#include <kstring.h>
+#include "kstring.h"
 
 void print_help() {
     printf("\n");
     printf("EGGS v1.0 May 2025\n");
-    printf("----------------------\n\n");
+    printf("------------------\n\n");
     printf("Written by T. Quinn Smith\n");
     printf("Principal Investigator: Zachary A. Szpiech\n");
     printf("The Pennsylvania State University\n\n");
-    printf("Usage: eggs [options]\n\n");
-    printf("Options:\n");
+    printf("Usage: eggs [OPTIONS]\n\n");
+    printf("Reads from stdin and write to stdout unless -o is provided.\n");
+    printf("OPTIONS:\n");
     printf("    -h,--help                       Print help.\n");
     printf("    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
     printf("    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
-    printf("    -s,--pseudohap                  Pseudohaploidize all samples.\n");
-    printf("    -a,--hap                        Ignores -s. Haploidize all samples.\n");
+    printf("    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
+    printf("    -a,--hap                        Precedence over -s. Haploidize all samples.\n");
     printf("    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     printf("    -m,--mask       STR             Filename of VCF to use as mask for missing genotypes.\n");
     printf("    -f,--fill       INT             Used with -m. If distance (in base-paris) between missing\n");
@@ -79,7 +80,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
             return -1;
         }
         eggsConfig -> stdMissing = strtod(next + 1, (char**) NULL);
-        if (eggsConfig -> meanMissing < 0 || eggsConfig -> stdMissing <= 0) {
+        if (eggsConfig -> meanMissing >= 1 || eggsConfig <= 0 || eggsConfig -> stdMissing <= 0 || eggsConfig -> stdMissing * eggsConfig -> stdMissing >= eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) {
             fprintf(stderr, "-r must satisfy parameters for a beta distribution. Exiting!\n");
             free(meanstd);
             destroy_eggs_configuration(eggsConfig);
