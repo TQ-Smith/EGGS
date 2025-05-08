@@ -49,7 +49,7 @@ static ko_longopt_t long_options[] = {
 };
 
 int check_configuration(EggsConfig_t* eggsConfig) {
-    if (eggsConfig -> fill != -1 && eggsConfig -> fill <= 0) {
+    if (eggsConfig -> fill < 0) {
         fprintf(stderr, "-f must be given an integer > 0. Exiting!\n");
         destroy_eggs_configuration(eggsConfig);
         return -1;
@@ -112,7 +112,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> hap = false;
     eggsConfig -> outFile = NULL;
     eggsConfig -> maskFile = NULL;
-    eggsConfig -> fill = -1;
+    eggsConfig -> fill = 0;
     eggsConfig -> meanMissing = -1;
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = 1000000;
