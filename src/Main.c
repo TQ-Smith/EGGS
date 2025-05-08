@@ -22,7 +22,7 @@ void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile f
     gzprintf(fpOut, "\n");
 }
 
-void print_record(Record_t* record, EggsConfig_t* eggsConfig, gzFile fpOut) {
+void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
     if (record -> chrom == NULL) 
         gzprintf(fpOut, "chr1");
     else 
@@ -44,28 +44,36 @@ void print_record(Record_t* record, EggsConfig_t* eggsConfig, gzFile fpOut) {
         swapStates = true;
     for (int i = 0; i < record -> numSamples; i++) {
 
-        if (eggsConfig -> hap) {
+        if (mask != NULL && mask[i] == MISSING) {
+            record -> genotypes[i].isPhased = false;
+            record -> genotypes[i].left = MISSING;
             record -> genotypes[i].right = MISSING;
-            eggsConfig -> pseudohap = false;
-        }
+        } else {
 
-        if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
-            record -> genotypes[i].isPhased = false;
-            if (rand() < 0.5)
-                SWAP(record -> genotypes[i].left, record -> genotypes[i].right, tempInt);
-        }
+            if (eggsConfig -> hap) {
+                record -> genotypes[i].right = MISSING;
+                eggsConfig -> pseudohap = false;
+            }
 
-        if (swapStates && record -> genotypes[i].left != MISSING)
-            record -> genotypes[i].left ^= 1;
-        if (swapStates && record -> genotypes[i].right != MISSING)
-            record -> genotypes[i].right ^= 1;
+            if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
+                record -> genotypes[i].isPhased = false;
+                if (rand() < 0.5)
+                    SWAP(record -> genotypes[i].left, record -> genotypes[i].right, tempInt);
+            }
 
-        if (eggsConfig -> pseudohap && !eggsConfig -> hap) {
-            record -> genotypes[i].isPhased = false;
-            if (rand() < 0.5)
-                record -> genotypes[i].right = record -> genotypes[i].left;
-            else
-                record -> genotypes[i].left = record -> genotypes[i].right;
+            if (swapStates && record -> genotypes[i].left != MISSING)
+                record -> genotypes[i].left ^= 1;
+            if (swapStates && record -> genotypes[i].right != MISSING)
+                record -> genotypes[i].right ^= 1;
+
+            if (eggsConfig -> pseudohap && !eggsConfig -> hap) {
+                record -> genotypes[i].isPhased = false;
+                if (rand() < 0.5)
+                    record -> genotypes[i].right = record -> genotypes[i].left;
+                else
+                    record -> genotypes[i].left = record -> genotypes[i].right;
+            }
+
         }
 
         if (record -> genotypes[i].left == MISSING)
@@ -84,10 +92,13 @@ void print_record(Record_t* record, EggsConfig_t* eggsConfig, gzFile fpOut) {
     gzprintf(fpOut, "\n");
 }
 
-void print_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
+void print_replicate(Replicate_t* replicate, Mask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
     Record_t* temp = replicate -> headRecord;
     for (int i = 0; i < replicate -> numRecords; i++) {
-        print_record(temp, eggsConfig, fpOut);
+        if (mask == NULL)
+            print_record(temp, NULL, eggsConfig, fpOut);
+        else 
+            print_record(temp, mask -> missing[i], eggsConfig, fpOut);
         temp = temp -> nextRecord;
     }
 }
@@ -106,7 +117,7 @@ int main(int argc, char* argv[]) {
     if (strncmp(inputStream -> buffer -> s, "##fileformat=VCF", 16) == 0) {
         gzFile fpOut;
         if (eggsConfig -> outFile != NULL) {
-            kstring_t* outName = calloc(1, sizeof(kstring_t));
+            kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
             ksprintf(outName, "%s.vcf.gz", eggsConfig -> outFile);
             fpOut = gzopen(outName -> s, "w");
             free(outName -> s); free(outName);
@@ -114,41 +125,64 @@ int main(int argc, char* argv[]) {
             fpOut = gzdopen(fileno(stdout), "w");
         }
         Replicate_t* replicate = init_vcf_replicate(inputStream);
+        Mask_t* mask = NULL;
         print_vcf_header(replicate, eggsConfig, fpOut);
-        if (eggsConfig -> maskFile == NULL || eggsConfig -> randomMissing != NULL) {
-            Record_t* record = calloc(1, sizeof(Record_t));
-            record -> genotypes = calloc(replicate -> numSamples, sizeof(Genotype_t));
+        if (eggsConfig -> maskFile == NULL && eggsConfig -> randomMissing == NULL) {
+            Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
+            record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
             record -> numSamples = replicate -> numSamples;
             while (get_next_vcf_record(record, inputStream))
-                print_record(record, eggsConfig, fpOut);
+                print_record(record, NULL, eggsConfig, fpOut);
             destroy_record(record);
         } else {
             parse_vcf(replicate, inputStream);
-            print_replicate(replicate, eggsConfig, fpOut);
+            if (eggsConfig -> maskFile != NULL) {
+                mask = init_mask(replicate -> numSamples, replicate -> numRecords);
+                mask -> missing[1][0] = mask -> missing[3][0] = mask -> missing[0][1] = mask -> missing[4][1] = MISSING;
+                if (eggsConfig -> fill > 0)
+                    apply_fill(replicate, mask, eggsConfig -> fill);
+            } else if (eggsConfig -> randomMissing != NULL) {
+                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
+                if (eggsConfig -> fill > 0)
+                    apply_fill(replicate, mask, eggsConfig -> fill);
+            }
+            print_replicate(replicate, mask, eggsConfig, fpOut);
         }
         destroy_replicate(replicate);
         gzclose(fpOut);
+        destroy_mask(mask);
     } else {
         Replicate_t* replicate = NULL;
         while ((replicate = parse_ms(inputStream, eggsConfig -> length)) != NULL) {
+            Mask_t* mask = NULL;
+            if (eggsConfig -> maskFile != NULL) {
+                // TODO.
+                if (eggsConfig -> fill > 0)
+                    apply_fill(replicate, mask, eggsConfig -> fill);
+            } else if (eggsConfig -> randomMissing != NULL) {
+                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
+                if (eggsConfig -> fill > 0)
+                    apply_fill(replicate, mask, eggsConfig -> fill);
+            }
             gzFile fpOut;
             if (ks_eof(inputStream -> fpIn) && eggsConfig -> outFile == NULL && numReps == 1) {
                 fpOut = gzdopen(fileno(stdout), "w");
             } else if (eggsConfig -> outFile != NULL) {
-                kstring_t* outName = calloc(1, sizeof(kstring_t));
+                kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
                 ksprintf(outName, "%s_rep%d.vcf.gz", eggsConfig -> outFile, numReps);
                 fpOut = gzopen(outName -> s, "w");
                 free(outName -> s); free(outName);
             } else {
-                kstring_t* outName = calloc(1, sizeof(kstring_t));
+                kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
                 ksprintf(outName, "rep%d.vcf.gz", numReps);
                 fpOut = gzopen(outName -> s, "w");
                 free(outName -> s); free(outName);
             }
             print_vcf_header(replicate, eggsConfig, fpOut);
-            print_replicate(replicate, eggsConfig, fpOut);
+            print_replicate(replicate, mask, eggsConfig, fpOut);
             gzclose(fpOut);
             destroy_replicate(replicate);
+            destroy_mask(mask);
             numReps++;
         }
     }

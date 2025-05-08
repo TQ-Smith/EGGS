@@ -5,12 +5,12 @@
 #include <time.h>
 
 Mask_t* init_mask(int numSamples, int numRecords) {
-    Mask_t* mask = calloc(1, sizeof(Mask_t));
+    Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));
     mask -> numSamples = numSamples;
     mask -> numRecords = numRecords;
-    mask -> missing = calloc(numRecords, sizeof(int*));
+    mask -> missing = (int**) calloc(numRecords, sizeof(int*));
     for (int i = 0; i < numRecords; i++) {
-        mask -> missing[i] = calloc(numSamples, sizeof(int));
+        mask -> missing[i] = (int*) calloc(numSamples, sizeof(int));
     }
     return mask;
 }
@@ -41,9 +41,9 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double s
 
     Mask_t* mask = init_mask(numSamples, numRecords);
 
-    int* permu = calloc(numRecords, sizeof(int));
-    for (int i = 1; i <= numRecords; i++)
-        permu[i] = i;
+    int* permu = (int*) calloc(numRecords, sizeof(int));
+    for (int i = 0; i < numRecords; i++)
+        permu[i] = i + 1;
 
     double alpha = (mean * mean * (1 - mean)) / (stder * stder) - mean;
     double beta = (alpha / mean) * (1 - mean);
@@ -63,20 +63,22 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double s
 
 void apply_fill(Replicate_t* replicate, Mask_t* mask, int fill) {
     Record_t* prevMisRecord = NULL;
-    Record_t* temp = replicate -> headRecord;
+    Record_t* temp = NULL;
     int prevMisGenoPos = -1;
     for (int i = 0; i < mask -> numSamples; i++) { 
+        temp = replicate -> headRecord;
+        prevMisRecord = NULL;
         for (int j = 0; j < mask -> numRecords; j++) {
-            if (prevMisGenoPos == -1 || mask -> missing[j][i] == MISSING) {
-                if (prevMisGenoPos != -1 && (temp -> position - prevMisGenoPos) <= fill) {
+            if (mask -> missing[j][i] == MISSING) {
+                if (prevMisRecord != NULL && (temp -> position - prevMisGenoPos) <= fill) {
                     for (Record_t* k = prevMisRecord -> nextRecord; k != temp; k = k -> nextRecord) {
-                        k -> genotypes[j].left = MISSING;
-                        k -> genotypes[j].right = MISSING;
+                        k -> genotypes[i].isPhased = false;
+                        k -> genotypes[i].left = MISSING;
+                        k -> genotypes[i].right = MISSING;
                     }
-                } else {
-                    prevMisGenoPos = temp -> position;
-                    prevMisRecord = temp;
                 }
+                prevMisGenoPos = temp -> position;
+                prevMisRecord = temp;
             }
             temp = temp -> nextRecord;
         }

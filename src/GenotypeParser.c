@@ -5,11 +5,11 @@
 InputStream_t* init_input_stream(FILE* source) {
     if (source == NULL)
         return NULL;
-    InputStream_t* inputStream = calloc(1, sizeof(InputStream_t));
+    InputStream_t* inputStream = (InputStream_t*) calloc(1, sizeof(InputStream_t));
     int fIn = fileno(source);
     inputStream -> file = gzdopen(fIn, "r");
     inputStream -> fpIn = ks_init(inputStream -> file);
-    inputStream -> buffer = calloc(1, sizeof(kstring_t));
+    inputStream -> buffer = (kstring_t*) calloc(1, sizeof(kstring_t));
     return inputStream;
 }
 
@@ -31,7 +31,7 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
     if (inputStream == NULL)
         return NULL;
 
-    Replicate_t* replicate = calloc(1, sizeof(Replicate_t));
+    Replicate_t* replicate = (Replicate_t*) calloc(1, sizeof(Replicate_t));
 
     int dret;
     do {
@@ -115,8 +115,8 @@ void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream) {
 
     while (true) {
 
-        Record_t* record = calloc(1, sizeof(Record_t));
-        record -> genotypes = calloc(replicate -> numSamples, sizeof(Genotype_t));
+        Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
+        record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
         record -> numSamples = replicate -> numSamples;
 
         if (get_next_vcf_record(record, inputStream)) {
@@ -181,13 +181,13 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length) {
         numLineages++;
     }
 
-    Replicate_t* replicate = calloc(1, sizeof(Replicate_t));
+    Replicate_t* replicate = (Replicate_t*) calloc(1, sizeof(Replicate_t));
     replicate -> numSamples = numLineages / 2;
     replicate -> numRecords = segsites;
 
     for (int i = 0; i < replicate -> numRecords; i++) {
-        Record_t* temp = calloc(1, sizeof(Record_t));
-        temp -> genotypes = calloc(replicate -> numSamples, sizeof(Genotype_t));
+        Record_t* temp = (Record_t*) calloc(1, sizeof(Record_t));
+        temp -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
         temp -> position = kv_A(positions, i);
         temp -> numSamples = replicate -> numSamples; 
         temp -> numAlleles = 2;

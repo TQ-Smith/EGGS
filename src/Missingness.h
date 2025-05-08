@@ -20,6 +20,8 @@ typedef struct {
     int** missing;
 } Mask_t;
 
+Mask_t* init_mask(int numSamples, int numRecords);
+
 FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate);
 
 Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords);

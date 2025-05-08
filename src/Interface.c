@@ -22,8 +22,8 @@ void print_help() {
     printf("    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
     printf("    -a,--hap                        Precedence over -s. Haploidize all samples.\n");
     printf("    -o,--out        STR             Basename to use for output files instead of stdout.\n");
-    printf("    -m,--mask       STR             Filename of VCF to use as mask for missing genotypes.\n");
-    printf("    -r,--random     DOUBLE,DOUBLE   Ignores -m. The mean and standard error used to introduce missing genotypes.\n");
+    printf("    -m,--mask       STR             Presedence over -r. Filename of VCF to use as mask for missing genotypes.\n");
+    printf("    -r,--random     DOUBLE,DOUBLE   The mean and std. error used to introduce missing genotypes.\n");
     printf("                                        A number is drawn to determine proportion of missing sites for each sample.\n");
     printf("    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
     printf("                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
@@ -105,7 +105,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
         }
 	}
 
-    EggsConfig_t* eggsConfig = calloc(1, sizeof(EggsConfig_t));
+    EggsConfig_t* eggsConfig = (EggsConfig_t*) calloc(1, sizeof(EggsConfig_t));
     eggsConfig -> unphase = false;
     eggsConfig -> unpolarize = false;
     eggsConfig -> pseudohap = false;
@@ -138,7 +138,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     if (check_configuration(eggsConfig) != 0)
         return NULL;
 
-    kstring_t* cmd = calloc(1, sizeof(kstring_t));
+    kstring_t* cmd = (kstring_t*) calloc(1, sizeof(kstring_t));
     for (int i = 0; i < argc; i++) 
         ksprintf(cmd, "%s ", argv[i]);
     eggsConfig -> command = cmd -> s;
