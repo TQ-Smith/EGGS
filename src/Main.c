@@ -50,11 +50,6 @@ void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile 
             record -> genotypes[i].right = MISSING;
         } else {
 
-            if (eggsConfig -> hap) {
-                record -> genotypes[i].right = MISSING;
-                eggsConfig -> pseudohap = false;
-            }
-
             if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
                 record -> genotypes[i].isPhased = false;
                 if (rand() < 0.5)
@@ -66,7 +61,7 @@ void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile 
             if (swapStates && record -> genotypes[i].right != MISSING)
                 record -> genotypes[i].right ^= 1;
 
-            if (eggsConfig -> pseudohap && !eggsConfig -> hap) {
+            if (eggsConfig -> pseudohap) {
                 record -> genotypes[i].isPhased = false;
                 if (rand() < 0.5)
                     record -> genotypes[i].right = record -> genotypes[i].left;

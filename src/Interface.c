@@ -7,30 +7,28 @@
 #include "kstring.h"
 
 void print_help() {
-    printf("\n");
-    printf("EGGS v1.0 May 2025\n");
-    printf("------------------\n\n");
-    printf("Written by T. Quinn Smith\n");
-    printf("Principal Investigator: Zachary A. Szpiech\n");
-    printf("The Pennsylvania State University\n\n");
-    printf("Usage: eggs [OPTIONS]\n\n");
-    printf("Reads from stdin and write to stdout unless -o is provided.\n");
-    printf("OPTIONS:\n");
-    printf("    -h,--help                       Print help.\n");
-    printf("    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
-    printf("    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
-    printf("    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
-    printf("    -a,--hap                        Precedence over -s. Haploidize all samples.\n");
-    printf("    -o,--out        STR             Basename to use for output files instead of stdout.\n");
-    printf("    -m,--mask       STR             Presedence over -r. Filename of VCF to use as mask for missing genotypes.\n");
-    printf("    -r,--random     DOUBLE,DOUBLE   The mean and std. error used to introduce missing genotypes.\n");
-    printf("                                        A number is drawn to determine proportion of missing sites for each sample.\n");
-    printf("    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
-    printf("                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
-    printf("    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
-    printf("                                        Default 1,000,000 base-pairs.\n");
-    printf("    -t,--threads    INT             Only used when -m is provided. Number of threads to use in Fourier computations.\n");
-    printf("\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "EGGS v1.0 May 2025\n");
+    fprintf(stderr, "------------------\n\n");
+    fprintf(stderr, "Written by T. Quinn Smith\n");
+    fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
+    fprintf(stderr, "The Pennsylvania State University\n\n");
+    fprintf(stderr, "Usage: eggs [OPTIONS]\n\n");
+    fprintf(stderr, "Reads from stdin and write to stdout unless -o is provided.\n");
+    fprintf(stderr, "OPTIONS:\n");
+    fprintf(stderr, "    -h,--help                       Print help.\n");
+    fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
+    fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
+    fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
+    fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
+    fprintf(stderr, "    -m,--mask       STR             Filename of VCF to use as mask for missing genotypes.\n");
+    fprintf(stderr, "    -r,--random     DOUBLE,DOUBLE   The mean and std. error used to introduce missing genotypes.\n");
+    fprintf(stderr, "                                        A number is drawn to determine proportion of missing sites for each sample.\n");
+    fprintf(stderr, "    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
+    fprintf(stderr, "                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
+    fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
+    fprintf(stderr, "                                        Default 1,000,000 base-pairs.\n");
+    fprintf(stderr, "\n");
 }
 
 static ko_longopt_t long_options[] = {
@@ -38,13 +36,11 @@ static ko_longopt_t long_options[] = {
     {"unphase",         ko_no_argument,         'u'},
     {"unpolarize",      ko_no_argument,         'p'},
     {"pseudohap",       ko_no_argument,         's'},
-    {"hap",             ko_no_argument,         'a'},
     {"out",             ko_required_argument,   'o'},
     {"mask",            ko_required_argument,   'm'},
     {"fill",            ko_required_argument,   'f'},
     {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
-    {"threads",         ko_required_argument,   't'},
     {0, 0, 0}
 };
 
@@ -61,11 +57,6 @@ int check_configuration(EggsConfig_t* eggsConfig) {
     }
     if (eggsConfig -> maskFile != NULL && access(eggsConfig -> maskFile, F_OK) != 0) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
-        destroy_eggs_configuration(eggsConfig);
-        return -1;
-    }
-    if (eggsConfig -> threads <= 0) {
-        fprintf(stderr, "-t must be given an integer >= 1. Exiting!\n");
         destroy_eggs_configuration(eggsConfig);
         return -1;
     }
@@ -93,7 +84,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hupaso:m:f:r:l:t:";
+    const char *opt_str = "hupso:m:f:r:l:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -109,7 +100,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> unphase = false;
     eggsConfig -> unpolarize = false;
     eggsConfig -> pseudohap = false;
-    eggsConfig -> hap = false;
     eggsConfig -> outFile = NULL;
     eggsConfig -> maskFile = NULL;
     eggsConfig -> fill = 0;
@@ -117,7 +107,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = 1000000;
     eggsConfig -> command = NULL;
-    eggsConfig -> threads = 1;
 
     options = KETOPT_INIT;
     while ((c = ketopt(&options, argc, argv, 1, opt_str, long_options)) >= 0) {
@@ -125,13 +114,11 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'u': eggsConfig -> unphase = true; break;
             case 'p': eggsConfig -> unpolarize = true; break;
             case 's': eggsConfig -> pseudohap = true; break;
-            case 'a': eggsConfig -> hap = true; break;
             case 'o': eggsConfig -> outFile = strdup(options.arg); break;
             case 'm': eggsConfig -> maskFile = strdup(options.arg); break;
             case 'f': eggsConfig -> fill = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
-            case 't': eggsConfig -> threads = (int) strtol(options.arg, (char**) NULL, 10); break;
         }
 	}
 

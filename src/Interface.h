@@ -11,7 +11,6 @@ typedef struct {
     bool unphase;
     bool unpolarize;
     bool pseudohap;
-    bool hap;
     char* outFile;
     char* maskFile;
     int fill;
@@ -19,7 +18,6 @@ typedef struct {
     double meanMissing;
     double stdMissing;
     int length;
-    int threads;
     char* command;
 } EggsConfig_t;
 
