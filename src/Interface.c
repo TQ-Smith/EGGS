@@ -1,6 +1,5 @@
 
 #include "Interface.h"
-
 #include <stdio.h>
 #include "ketopt.h"
 #include <unistd.h>

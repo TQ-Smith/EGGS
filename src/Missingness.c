@@ -3,6 +3,9 @@
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 #include <time.h>
+#include "kissfft/kiss_fftr.h"
+
+#define EPS 1e-8
 
 Mask_t* init_mask(int numSamples, int numRecords) {
     Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));
@@ -26,11 +29,92 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
 }
 
 FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
-    return NULL;
+    if (replicate == NULL)
+        return NULL;
+    if (replicate -> numRecords == 0 || replicate -> numSamples == 0)
+        return NULL;
+
+    kiss_fft_scalar** inMask = (kiss_fft_scalar**) calloc(replicate -> numSamples, sizeof(kiss_fft_scalar*));
+    for (int i = 0; i < replicate -> numSamples; i++) {
+        inMask[i] = (kiss_fft_scalar*) calloc(replicate -> numRecords, sizeof(kiss_fft_scalar));
+        int j = 0;
+        for (Record_t* head = replicate -> headRecord; head != NULL; head = head -> nextRecord) {
+            if (head -> genotypes[i].left == MISSING && head -> genotypes[i].right == MISSING) 
+                inMask[i][j] = 1;
+            else
+                inMask[i][j] = 0;
+            j++;
+        }
+    }
+
+    FourierCoefficients_t* fourierCoeff = (FourierCoefficients_t*) calloc(1, sizeof(FourierCoefficients_t));
+    fourierCoeff -> numSamples = replicate -> numSamples;
+    fourierCoeff -> numRecords = replicate -> numRecords;
+    if (replicate -> numRecords % 2 != 0)
+        fourierCoeff -> numRecords += 1;
+    fourierCoeff -> coeff = (kiss_fft_cpx**) calloc(fourierCoeff -> numSamples, sizeof(kiss_fft_cpx*));
+
+    kiss_fftr_cfg kiss_fft_state = kiss_fftr_alloc(fourierCoeff -> numRecords, 0, 0, 0);
+
+    for (int i = 0; i < fourierCoeff -> numSamples; i++) {
+        fourierCoeff -> coeff[i] = (kiss_fft_cpx*) calloc(fourierCoeff -> numRecords / 2 + 1, sizeof(kiss_fft_cpx));
+        kiss_fftr(kiss_fft_state, inMask[i], fourierCoeff -> coeff[i]);
+    }
+
+    free(kiss_fft_state);
+    for (int i = 0; i < fourierCoeff -> numSamples; i++)
+        free(inMask[i]);
+    free(inMask);
+    kiss_fft_cleanup();
+
+    return fourierCoeff;
 }
 
 Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords) {
-    return NULL;
+    if (fourierCoeff == NULL || numSamples == 0 || numRecords == 0)
+        return NULL;
+
+    Mask_t* mask = init_mask(numSamples, numRecords);
+
+    if (numRecords % 2 != 0)
+        numRecords++;
+    kiss_fft_cpx* freqs = (kiss_fft_cpx*) calloc(numRecords / 2 + 1, sizeof(kiss_fft_cpx));
+    kiss_fft_scalar* inv = (kiss_fft_scalar*) calloc(numRecords, sizeof(kiss_fft_scalar));
+    kiss_fftr_cfg kiss_fft_state = kiss_fftr_alloc(numRecords, 1, 0, 0);
+
+    gsl_rng_env_setup();
+    const gsl_rng_type* T = gsl_rng_default;
+    gsl_rng* r = gsl_rng_alloc(T);
+    gsl_rng_set(r, time(NULL));
+    int randSample;
+
+    for (int i = 0; i < numSamples; i++) {
+        for (int j = 0; j < numRecords / 2 + 1; j++) {
+            if (j == numRecords / 2) {
+                randSample = (int) (fourierCoeff -> numSamples * gsl_rng_uniform(r));
+                freqs[j].r = fourierCoeff -> coeff[randSample][fourierCoeff -> numRecords / 2].r;
+                freqs[j].i = fourierCoeff -> coeff[randSample][fourierCoeff -> numRecords / 2].i;
+            } else if (j < fourierCoeff -> numRecords / 2) {
+                randSample = (int) (fourierCoeff -> numSamples * gsl_rng_uniform(r));
+                freqs[j].r = fourierCoeff -> coeff[randSample][j].r;
+                freqs[j].i = fourierCoeff -> coeff[randSample][j].i;
+            } else {
+                freqs[j].r = 0;
+                freqs[j].i = 0;
+            }
+        }
+        kiss_fftri(kiss_fft_state, freqs, inv);
+        for (int j = 0; j < numRecords; j++)
+            if (fabs(inv[j] - 1) <= EPS)
+                mask -> missing[i][j] = MISSING;
+    }
+
+    free(freqs);
+    free(inv);
+    free(kiss_fft_state);
+    gsl_rng_free(r);
+    kiss_fft_cleanup();
+    return mask;
 }
 
 Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double stder) {
@@ -96,6 +180,13 @@ void destroy_mask(Mask_t* mask) {
     free(mask);
 }
 
-void destroy_fourier_coefficients(int numSamples) {
-
+void destroy_fourier_coefficients(FourierCoefficients_t* fourierCoeff) {
+    if (fourierCoeff == NULL)
+        return;
+    if (fourierCoeff -> coeff != NULL) {
+        for (int i = 0; i < fourierCoeff -> numSamples; i++)
+            free(fourierCoeff -> coeff[i]);
+        free(fourierCoeff -> coeff);
+    }
+    free(fourierCoeff);
 }

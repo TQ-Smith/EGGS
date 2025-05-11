@@ -12,6 +12,7 @@
 typedef struct {
     int numSamples;
     int numRecords;
+    kiss_fft_cpx** coeff;
 } FourierCoefficients_t;
 
 typedef struct {
@@ -32,6 +33,6 @@ void apply_fill(Replicate_t* replicate, Mask_t* mask, int fill);
 
 void destroy_mask(Mask_t* mask);
 
-void destroy_fourier_coefficients(int numSamples);
+void destroy_fourier_coefficients(FourierCoefficients_t* fourierCoeff);
 
 #endif

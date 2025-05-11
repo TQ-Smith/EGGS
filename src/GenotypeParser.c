@@ -2,12 +2,13 @@
 #include "GenotypeParser.h"
 #include "kvec.h"
 
-InputStream_t* init_input_stream(FILE* source) {
-    if (source == NULL)
-        return NULL;
+InputStream_t* init_input_stream(char* source) {
     InputStream_t* inputStream = (InputStream_t*) calloc(1, sizeof(InputStream_t));
-    int fIn = fileno(source);
-    inputStream -> file = gzdopen(fIn, "r");
+    if (source == NULL) {
+        int fIn = fileno(stdin);
+        inputStream -> file = gzdopen(fIn, "r");
+    } else 
+        inputStream -> file = gzopen(source, "r");
     inputStream -> fpIn = ks_init(inputStream -> file);
     inputStream -> buffer = (kstring_t*) calloc(1, sizeof(kstring_t));
     return inputStream;
@@ -43,7 +44,6 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
         if (inputStream -> buffer -> s[i] == '\t')
             numSamples++;
     replicate -> numSamples = numSamples - 8;
-
 
     int numTabs = 0, prevIndex = 0;
     replicate -> sampleNames = calloc(replicate -> numSamples, sizeof(char*));

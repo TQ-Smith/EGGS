@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
     EggsConfig_t* eggsConfig = init_eggs_configuration(argc, argv);
     if (eggsConfig == NULL)
         return -1;
-    InputStream_t* inputStream = init_input_stream(stdin);
+    InputStream_t* inputStream = init_input_stream(NULL);
     int numReps = 1;
 
     ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, 0);
@@ -132,8 +132,20 @@ int main(int argc, char* argv[]) {
         } else {
             parse_vcf(replicate, inputStream);
             if (eggsConfig -> maskFile != NULL) {
-                mask = init_mask(replicate -> numSamples, replicate -> numRecords);
-                mask -> missing[1][0] = mask -> missing[3][0] = mask -> missing[0][1] = mask -> missing[4][1] = MISSING;
+                InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile);
+                Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
+                parse_vcf(maskReplicate, maskInput);
+                FourierCoefficients_t* fourierCoeff = init_fourier_coefficients(maskReplicate);
+                mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords);
+                for (int i = 0; i < replicate -> numRecords; i++) {
+                    for (int j = 0; j < replicate -> numSamples; j++) {
+                        gzprintf(fpOut, "%d\t", mask ->missing[j][i]);
+                    }
+                    gzprintf(fpOut, "\n");
+                }
+                destroy_fourier_coefficients(fourierCoeff);
+                destroy_input_stream(maskInput);
+                destroy_replicate(maskReplicate);
                 if (eggsConfig -> fill > 0)
                     apply_fill(replicate, mask, eggsConfig -> fill);
             } else if (eggsConfig -> randomMissing != NULL) {
@@ -148,10 +160,19 @@ int main(int argc, char* argv[]) {
         destroy_mask(mask);
     } else {
         Replicate_t* replicate = NULL;
+        FourierCoefficients_t* fourierCoeff = NULL;
+        if (eggsConfig -> maskFile != NULL) {
+            InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile);
+            Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
+            parse_vcf(maskReplicate, maskInput);
+            fourierCoeff = init_fourier_coefficients(maskReplicate);
+            destroy_input_stream(maskInput);
+            destroy_replicate(maskReplicate);
+        }
         while ((replicate = parse_ms(inputStream, eggsConfig -> length)) != NULL) {
             Mask_t* mask = NULL;
             if (eggsConfig -> maskFile != NULL) {
-                // TODO.
+                mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords);
                 if (eggsConfig -> fill > 0)
                     apply_fill(replicate, mask, eggsConfig -> fill);
             } else if (eggsConfig -> randomMissing != NULL) {
@@ -177,6 +198,7 @@ int main(int argc, char* argv[]) {
             print_replicate(replicate, mask, eggsConfig, fpOut);
             gzclose(fpOut);
             destroy_replicate(replicate);
+            destroy_fourier_coefficients(fourierCoeff);
             destroy_mask(mask);
             numReps++;
         }

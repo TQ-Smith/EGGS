@@ -46,7 +46,7 @@ typedef struct {
     kstring_t* buffer;
 } InputStream_t;
 
-InputStream_t* init_input_stream(FILE* source);
+InputStream_t* init_input_stream(char* source);
 
 void destroy_input_stream(InputStream_t* inputStream);
 
