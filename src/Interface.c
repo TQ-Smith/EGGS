@@ -55,6 +55,11 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         destroy_eggs_configuration(eggsConfig);
         return -1;
     }
+    if (eggsConfig -> randomMissing != NULL && eggsConfig -> maskFile != NULL) {
+        fprintf(stderr, "Cannot use -m and -r options together. Exiting!\n");
+        destroy_eggs_configuration(eggsConfig);
+        return -1;
+    }
     if (eggsConfig -> maskFile != NULL && access(eggsConfig -> maskFile, F_OK) != 0) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
         destroy_eggs_configuration(eggsConfig);
