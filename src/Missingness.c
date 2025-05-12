@@ -28,15 +28,23 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
     }
 }
 
+float magnitude(float a, float b) {
+    return sqrt(a * a + b * b);
+}
+
 FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
     if (replicate == NULL)
         return NULL;
     if (replicate -> numRecords == 0 || replicate -> numSamples == 0)
         return NULL;
 
+    int offset = 1;
+    if (replicate -> numRecords % 2 == 0)
+        offset = 0;
+
     kiss_fft_scalar** inMask = (kiss_fft_scalar**) calloc(replicate -> numSamples, sizeof(kiss_fft_scalar*));
     for (int i = 0; i < replicate -> numSamples; i++) {
-        inMask[i] = (kiss_fft_scalar*) calloc(replicate -> numRecords, sizeof(kiss_fft_scalar));
+        inMask[i] = (kiss_fft_scalar*) calloc(replicate -> numRecords + offset, sizeof(kiss_fft_scalar));
         int j = 0;
         for (Record_t* head = replicate -> headRecord; head != NULL; head = head -> nextRecord) {
             if (head -> genotypes[i].left == MISSING && head -> genotypes[i].right == MISSING) 
@@ -49,11 +57,8 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
 
     FourierCoefficients_t* fourierCoeff = (FourierCoefficients_t*) calloc(1, sizeof(FourierCoefficients_t));
     fourierCoeff -> numSamples = replicate -> numSamples;
-    fourierCoeff -> numRecords = replicate -> numRecords;
-    if (replicate -> numRecords % 2 != 0)
-        fourierCoeff -> numRecords += 1;
+    fourierCoeff -> numRecords = replicate -> numRecords + offset;
     fourierCoeff -> coeff = (kiss_fft_cpx**) calloc(fourierCoeff -> numSamples, sizeof(kiss_fft_cpx*));
-
     kiss_fftr_cfg kiss_fft_state = kiss_fftr_alloc(fourierCoeff -> numRecords, 0, 0, 0);
 
     for (int i = 0; i < fourierCoeff -> numSamples; i++) {
@@ -76,8 +81,11 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
 
     Mask_t* mask = init_mask(numSamples, numRecords);
 
-    if (numRecords % 2 != 0)
-        numRecords++;
+    int offset = 1;
+    if (numRecords % 2 == 0)
+        offset = 0;
+    numRecords += offset;
+
     kiss_fft_cpx* freqs = (kiss_fft_cpx*) calloc(numRecords / 2 + 1, sizeof(kiss_fft_cpx));
     kiss_fft_scalar* inv = (kiss_fft_scalar*) calloc(numRecords, sizeof(kiss_fft_scalar));
     kiss_fftr_cfg kiss_fft_state = kiss_fftr_alloc(numRecords, 1, 0, 0);
@@ -89,12 +97,9 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
     int randSample;
 
     for (int i = 0; i < numSamples; i++) {
+        double power = 0;
         for (int j = 0; j < numRecords / 2 + 1; j++) {
-            if (j == numRecords / 2) {
-                randSample = (int) (fourierCoeff -> numSamples * gsl_rng_uniform(r));
-                freqs[j].r = fourierCoeff -> coeff[randSample][fourierCoeff -> numRecords / 2].r;
-                freqs[j].i = fourierCoeff -> coeff[randSample][fourierCoeff -> numRecords / 2].i;
-            } else if (j < fourierCoeff -> numRecords / 2) {
+            if (j <= fourierCoeff -> numRecords / 2) {
                 randSample = (int) (fourierCoeff -> numSamples * gsl_rng_uniform(r));
                 freqs[j].r = fourierCoeff -> coeff[randSample][j].r;
                 freqs[j].i = fourierCoeff -> coeff[randSample][j].i;
@@ -102,11 +107,23 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
                 freqs[j].r = 0;
                 freqs[j].i = 0;
             }
+            power += magnitude 
+        }
+        printf("Freqs:\n");
+        for (int j = 0; j < numRecords / 2 + 1; j++) {
+            printf("%.3f+%.3fi\n", freqs[j].r, freqs[j].i);
+        }
+        for (int j = 0; j < numRecords / 2 + 1; j++) {
+
         }
         kiss_fftri(kiss_fft_state, freqs, inv);
-        for (int j = 0; j < numRecords; j++)
-            if (fabs(inv[j] - 1) <= EPS)
+        printf("Missing:\n");
+        for (int j = 0; j < numRecords - offset; j++) {
+            if (fabs(inv[j] - 1) <= EPS) {
                 mask -> missing[i][j] = MISSING;
+            }
+            printf("%.3f\n", inv[j]);
+        }
     }
 
     free(freqs);

@@ -137,12 +137,6 @@ int main(int argc, char* argv[]) {
                 parse_vcf(maskReplicate, maskInput);
                 FourierCoefficients_t* fourierCoeff = init_fourier_coefficients(maskReplicate);
                 mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords);
-                for (int i = 0; i < replicate -> numRecords; i++) {
-                    for (int j = 0; j < replicate -> numSamples; j++) {
-                        gzprintf(fpOut, "%d\t", mask ->missing[j][i]);
-                    }
-                    gzprintf(fpOut, "\n");
-                }
                 destroy_fourier_coefficients(fourierCoeff);
                 destroy_input_stream(maskInput);
                 destroy_replicate(maskReplicate);

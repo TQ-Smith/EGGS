@@ -20,7 +20,7 @@ void print_help() {
     fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
-    fprintf(stderr, "    -m,--mask       STR             Filename of VCF to use as mask for missing genotypes.\n");
+    fprintf(stderr, "    -m,--mask       VCF             Filename of VCF to use as mask for missing genotypes.\n");
     fprintf(stderr, "    -r,--random     DOUBLE,DOUBLE   The mean and std. error used to introduce missing genotypes.\n");
     fprintf(stderr, "                                        A number is drawn to determine proportion of missing sites for each sample.\n");
     fprintf(stderr, "    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
@@ -75,7 +75,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
             return -1;
         }
         eggsConfig -> stdMissing = strtod(next + 1, (char**) NULL);
-        if (eggsConfig -> meanMissing >= 1 || eggsConfig <= 0 || eggsConfig -> stdMissing <= 0 || eggsConfig -> stdMissing * eggsConfig -> stdMissing >= eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) {
+        if (eggsConfig -> meanMissing >= 1 || eggsConfig -> meanMissing <= 0 || eggsConfig -> stdMissing <= 0 || eggsConfig -> stdMissing * eggsConfig -> stdMissing >= eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) {
             fprintf(stderr, "-r must satisfy parameters for a beta distribution. Exiting!\n");
             free(meanstd);
             destroy_eggs_configuration(eggsConfig);
