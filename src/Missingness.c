@@ -5,8 +5,6 @@
 #include <time.h>
 #include "kissfft/kiss_fftr.h"
 
-#define EPS 1e-8
-
 Mask_t* init_mask(int numSamples, int numRecords) {
     Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));
     mask -> numSamples = numSamples;
@@ -34,8 +32,8 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
     if (replicate -> numRecords == 0 || replicate -> numSamples == 0)
         return NULL;
 
-    int offset = 1;
-    if (replicate -> numRecords % 2 == 0)
+    int offset = -1;
+    if ((replicate -> numRecords) % 2 == 0)
         offset = 0;
 
     kiss_fft_scalar** inMask = (kiss_fft_scalar**) calloc(replicate -> numSamples, sizeof(kiss_fft_scalar*));
@@ -49,6 +47,8 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
                 inMask[i][j] = -1;
             j++;
         }
+        if (offset == 1)
+            inMask[i][replicate -> numRecords] = -1;
     }
 
     FourierCoefficients_t* fourierCoeff = (FourierCoefficients_t*) calloc(1, sizeof(FourierCoefficients_t));
@@ -77,7 +77,7 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
 
     Mask_t* mask = init_mask(numSamples, numRecords);
 
-    int offset = 1;
+    int offset = -1;
     if (numRecords % 2 == 0)
         offset = 0;
     numRecords += offset;
@@ -90,12 +90,15 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
     const gsl_rng_type* T = gsl_rng_default;
     gsl_rng* r = gsl_rng_alloc(T);
     gsl_rng_set(r, time(NULL));
-    int randSample;
+
+    double normalizationFactor = 1.0 / fourierCoeff -> numRecords;
+    if (numRecords < fourierCoeff -> numRecords)
+        normalizationFactor = 1.0 / numRecords;
 
     for (int i = 0; i < numSamples; i++) {
         for (int j = 0; j < numRecords / 2 + 1; j++) {
             if (j <= fourierCoeff -> numRecords / 2) {
-                randSample = (int) (fourierCoeff -> numSamples * gsl_rng_uniform(r));
+                int randSample = (int) (fourierCoeff -> numSamples * gsl_rng_uniform(r));
                 freqs[j].r = fourierCoeff -> coeff[randSample][j].r;
                 freqs[j].i = fourierCoeff -> coeff[randSample][j].i;
             } else {
@@ -103,18 +106,19 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
                 freqs[j].i = 0;
             }
         }
-        printf("Freqs:\n");
-        for (int j = 0; j < numRecords / 2 + 1; j++) {
-            printf("%.3f+%.3fi\n", freqs[j].r, freqs[j].i);
-        }
+        // printf("Freqs:\n");
+        // for (int j = 0; j < numRecords / 2 + 1; j++) {
+        //    printf("%.3f+%.3fi\n", freqs[j].r, freqs[j].i);
+        // }
         kiss_fftri(kiss_fft_state, freqs, inv);
-        printf("Missing:\n");
+        // printf("Missing:\n");
         for (int j = 0; j < numRecords - offset; j++) {
-            inv[j] /= numRecords;
-            if (fabs(inv[j] - 1) <= EPS) {
+            inv[j] *= normalizationFactor;
+            if (inv[j] > 0)
                 mask -> missing[i][j] = MISSING;
-            }
-            printf("%.3f\n", inv[j]);
+            else 
+                mask -> missing[i][j] = 0;
+            // printf("%.3f\t%d\n", inv[j], mask -> missing[i][j]);
         }
     }
 

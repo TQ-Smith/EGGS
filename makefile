@@ -53,11 +53,11 @@ lib/gsl:
 
 .PHONY: lib/kissfft
 lib/kissfft:
-	$(CC) $(CFLAGS) -Dkiss_fft_scalar=double lib/kissfft/kfc.c -o lib/kissfft/kfc.o
-	$(CC) $(CFLAGS) -Dkiss_fft_scalar=double lib/kissfft/kiss_fft.c -o lib/kissfft/kiss_fft.o
-	$(CC) $(CFLAGS) -Dkiss_fft_scalar=double lib/kissfft/kiss_fftnd.c -o lib/kissfft/kiss_fftnd.o
-	$(CC) $(CFLAGS) -Dkiss_fft_scalar=double lib/kissfft/kiss_fftndr.c -o lib/kissfft/kiss_fftndr.o
-	$(CC) $(CFLAGS) -Dkiss_fft_scalar=double lib/kissfft/kiss_fftr.c -o lib/kissfft/kiss_fftr.o
+	$(CC) $(CFLAGS) lib/kissfft/kfc.c -o lib/kissfft/kfc.o
+	$(CC) $(CFLAGS) lib/kissfft/kiss_fft.c -o lib/kissfft/kiss_fft.o
+	$(CC) $(CFLAGS) lib/kissfft/kiss_fftnd.c -o lib/kissfft/kiss_fftnd.o
+	$(CC) $(CFLAGS) lib/kissfft/kiss_fftndr.c -o lib/kissfft/kiss_fftndr.o
+	$(CC) $(CFLAGS) lib/kissfft/kiss_fftr.c -o lib/kissfft/kiss_fftr.o
 
 .PHONY: clean
 clean:
