@@ -28,10 +28,6 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
     }
 }
 
-float magnitude(float a, float b) {
-    return sqrt(a * a + b * b);
-}
-
 FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
     if (replicate == NULL)
         return NULL;
@@ -50,7 +46,7 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
             if (head -> genotypes[i].left == MISSING && head -> genotypes[i].right == MISSING) 
                 inMask[i][j] = 1;
             else
-                inMask[i][j] = 0;
+                inMask[i][j] = -1;
             j++;
         }
     }
@@ -97,7 +93,6 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
     int randSample;
 
     for (int i = 0; i < numSamples; i++) {
-        double power = 0;
         for (int j = 0; j < numRecords / 2 + 1; j++) {
             if (j <= fourierCoeff -> numRecords / 2) {
                 randSample = (int) (fourierCoeff -> numSamples * gsl_rng_uniform(r));
@@ -107,18 +102,15 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
                 freqs[j].r = 0;
                 freqs[j].i = 0;
             }
-            power += magnitude 
         }
         printf("Freqs:\n");
         for (int j = 0; j < numRecords / 2 + 1; j++) {
             printf("%.3f+%.3fi\n", freqs[j].r, freqs[j].i);
         }
-        for (int j = 0; j < numRecords / 2 + 1; j++) {
-
-        }
         kiss_fftri(kiss_fft_state, freqs, inv);
         printf("Missing:\n");
         for (int j = 0; j < numRecords - offset; j++) {
+            inv[j] /= numRecords;
             if (fabs(inv[j] - 1) <= EPS) {
                 mask -> missing[i][j] = MISSING;
             }
