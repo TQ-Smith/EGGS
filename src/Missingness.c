@@ -32,7 +32,7 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
     if (replicate -> numRecords == 0 || replicate -> numSamples == 0)
         return NULL;
 
-    int offset = -1;
+    int offset = 1;
     if ((replicate -> numRecords) % 2 == 0)
         offset = 0;
 
@@ -77,7 +77,7 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
 
     Mask_t* mask = init_mask(numSamples, numRecords);
 
-    int offset = -1;
+    int offset = 1;
     if (numRecords % 2 == 0)
         offset = 0;
     numRecords += offset;
@@ -108,17 +108,17 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
         }
         // printf("Freqs:\n");
         // for (int j = 0; j < numRecords / 2 + 1; j++) {
-        //    printf("%.3f+%.3fi\n", freqs[j].r, freqs[j].i);
+           // printf("%.3f+%.3fi\n", freqs[j].r, freqs[j].i);
         // }
         kiss_fftri(kiss_fft_state, freqs, inv);
         // printf("Missing:\n");
         for (int j = 0; j < numRecords - offset; j++) {
             inv[j] *= normalizationFactor;
             if (inv[j] > 0)
-                mask -> missing[i][j] = MISSING;
+                mask -> missing[j][i] = MISSING;
             else 
-                mask -> missing[i][j] = 0;
-            // printf("%.3f\t%d\n", inv[j], mask -> missing[i][j]);
+                mask -> missing[j][i] = 0;
+            // printf("%.3f\t%d\n", inv[j], mask -> missing[j][i]);
         }
     }
 
