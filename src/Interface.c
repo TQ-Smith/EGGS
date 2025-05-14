@@ -1,10 +1,17 @@
 
+// File: Interface.c
+// Date: 13 May 2025
+// Author: T. Quinn Smith
+// Principal Investigator: Dr. Zachary A. Szpiech
+// Purpose: Set user parameters from CLI.
+
 #include "Interface.h"
 #include <stdio.h>
 #include "ketopt.h"
 #include <unistd.h>
 #include "kstring.h"
 
+// Our help menu.
 void print_help() {
     fprintf(stderr, "\n");
     fprintf(stderr, "EGGS v1.0 May 2025\n");
@@ -30,6 +37,7 @@ void print_help() {
     fprintf(stderr, "\n");
 }
 
+// Our options.
 static ko_longopt_t long_options[] = {
     {"help",            ko_no_argument,         'h'},
     {"unphase",         ko_no_argument,         'u'},
@@ -43,42 +51,45 @@ static ko_longopt_t long_options[] = {
     {0, 0, 0}
 };
 
+// Accepts parsed parameters from user and ensures they are valid.
+// Returns: 0, if valid. -1, if invalid.
 int check_configuration(EggsConfig_t* eggsConfig) {
+    // Fill must be a positive integer.
     if (eggsConfig -> fill < 0) {
         fprintf(stderr, "-f must be given an integer > 0. Exiting!\n");
-        destroy_eggs_configuration(eggsConfig);
         return -1;
     }
+    // If length was set by the user, it must be an integer >= 1000.
     if (eggsConfig -> length != -1 && eggsConfig -> length < 1000) {
         fprintf(stderr, "-l must be given an integer >= 1000. Exiting!\n");
-        destroy_eggs_configuration(eggsConfig);
         return -1;
     }
+    // Cannot use mask and random genotypes together.
     if (eggsConfig -> randomMissing != NULL && eggsConfig -> maskFile != NULL) {
         fprintf(stderr, "Cannot use -m and -r options together. Exiting!\n");
-        destroy_eggs_configuration(eggsConfig);
         return -1;
     }
+    // If mask file given, make sure it exists.
     if (eggsConfig -> maskFile != NULL && access(eggsConfig -> maskFile, F_OK) != 0) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
-        destroy_eggs_configuration(eggsConfig);
         return -1;
     }
+    // If random mean and stderr were given, parse string.
     if (eggsConfig -> randomMissing != NULL) {
         char* meanstd = strdup(eggsConfig -> randomMissing);
         char* next  = NULL;
         eggsConfig -> meanMissing = strtod(meanstd, &next);
-        if (meanstd == next) {
+        // Ensure mean and stder were given seperated by a comma.
+        if (meanstd == next || next[0] != ',') {
             fprintf(stderr, "-r must be given two positive real numbers seperated by a comma. Exiting!\n");
-            destroy_eggs_configuration(eggsConfig);
             free(meanstd);
             return -1;
         }
         eggsConfig -> stdMissing = strtod(next + 1, (char**) NULL);
+        // Make sure mean and stder are valid for a beta distribution.
         if (eggsConfig -> meanMissing >= 1 || eggsConfig -> meanMissing <= 0 || eggsConfig -> stdMissing <= 0 || eggsConfig -> stdMissing * eggsConfig -> stdMissing >= eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) {
             fprintf(stderr, "-r must satisfy parameters for a beta distribution. Exiting!\n");
             free(meanstd);
-            destroy_eggs_configuration(eggsConfig);
             return -1;
         }
         free(meanstd);
@@ -92,6 +103,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     ketopt_t options = KETOPT_INIT;
     int c;
 
+    // Make sure we can parse the options. If -h was given, print help menu.
     while ((c = ketopt(&options, argc, argv, 1, opt_str, long_options)) >= 0) {
         switch (c) {
             case ':': fprintf(stderr, "Error! Option %s is missing an argument! Exiting ...\n", argv[options.i - 1]); return NULL;
@@ -100,6 +112,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
         }
 	}
 
+    // Set configuration defaults.
     EggsConfig_t* eggsConfig = (EggsConfig_t*) calloc(1, sizeof(EggsConfig_t));
     eggsConfig -> unphase = false;
     eggsConfig -> unpolarize = false;
@@ -112,6 +125,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> length = 1000000;
     eggsConfig -> command = NULL;
 
+    // Get parameters from user.
     options = KETOPT_INIT;
     while ((c = ketopt(&options, argc, argv, 1, opt_str, long_options)) >= 0) {
         switch (c) {
@@ -126,9 +140,13 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
         }
 	}
 
-    if (check_configuration(eggsConfig) != 0)
+    // If a parameter was invalid, we return null.
+    if (check_configuration(eggsConfig) != 0) {
+        destroy_eggs_configuration(eggsConfig);
         return NULL;
+    }
 
+    // Copy user EGGS command.
     kstring_t* cmd = (kstring_t*) calloc(1, sizeof(kstring_t));
     for (int i = 0; i < argc; i++) 
         ksprintf(cmd, "%s ", argv[i]);
