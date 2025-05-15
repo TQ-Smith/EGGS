@@ -1,8 +1,0 @@
-genotypename:    v49.1_aug_UKY_2_ST.uploadg.geno
-snpname:         v49.1_aug_UKY_2_ST.uploadg.snp
-indivname:       v49.1_aug_UKY_2_ST.uploadg.labels.ind
-outputformat:    PED
-genotypeoutname: zeng2025.ped
-snpoutname:      zeng2025.pedsnp
-indivoutname:    zeng2025.pedind
-familynames: no
