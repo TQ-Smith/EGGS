@@ -133,13 +133,14 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream) {
 }
 
 void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream) {
-
+    int recordIndex = 0;
     while (true) {
 
         // Allocate memory for a new record.
         Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
         record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
         record -> numSamples = replicate -> numSamples;
+        record -> recordIndex = recordIndex;
 
         // While not EOF, add record to the list.
         if (get_next_vcf_record(record, inputStream)) {
@@ -156,7 +157,7 @@ void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream) {
             free(record);
             break;
         }
-        
+        recordIndex++;
     }
 
 }
@@ -227,6 +228,7 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length) {
         temp -> position = kv_A(positions, i);
         temp -> numSamples = replicate -> numSamples; 
         temp -> numAlleles = 2;
+        temp -> recordIndex = i;
         for (int j = 0; j < replicate -> numSamples; j++) {
             // MS lineages are phased.
             temp -> genotypes[j].isPhased = true;

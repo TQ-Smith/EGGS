@@ -12,7 +12,7 @@ LFLAGS = -g -o
 
 bin/eggs: lib src
 	mkdir -p bin
-	$(CC) $(LFLAGS) bin/eggs src/*.o lib/*.o lib/gsl/*.o lib/kissfft/*.o -lz -lm
+	$(CC) $(LFLAGS) bin/eggs src/*.o lib/*.o lib/gsl/*.o lib/kissfft/*.o -lz -lm -lpthread
 
 .PHONY: src
 src: src/Main.o

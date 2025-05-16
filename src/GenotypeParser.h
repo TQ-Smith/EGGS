@@ -47,6 +47,8 @@ typedef struct Record {
     int numAlleles;
     // Redunant but useful. The number of samples in the genotypes array.
     int numSamples;
+    // The index of the record in the list.
+    int recordIndex;
     // The genotypes for each sample.
     Genotype_t* genotypes;
     // A pointer to the next locus. Record_t is a node in a linked list.

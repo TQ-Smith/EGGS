@@ -37,6 +37,8 @@ typedef struct {
     int length;
     // The EGGS command the user ran.
     char* command;
+    // The number of threads to use.
+    int numThreads;
 } EggsConfig_t;
 
 // Accepts the command line arguments and sets configuration parameters.

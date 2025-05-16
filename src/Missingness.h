@@ -5,7 +5,7 @@
 // Principal Investigator: Dr. Zachary A. Szpiech
 // Purpose: Mask out genotypes in replicates.
 
-// NOTE: I am iterating through the records-by-sample matrix a few more
+// NOTE: I am iterating through the sample-by-record matrix a few more
 //  times than I should. Plus, it would be more efficient to store the Mask
 //  as a sample-by-record matrix. I keep it in an unoptimized form for now
 //  to keep it straightforward.
@@ -46,13 +46,13 @@ typedef struct {
 Mask_t* init_mask(int numSamples, int numRecords);
 
 // Calculate the Fourier coefficients for each sample's missing genotypes in a replicate.
-FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate);
+FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int numThreads);
 
 // Create a numRecords-by-numSamples mask given a set of Fourier coefficients.
-Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords);
+Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords, int numThreads);
 
 // Create a numRecords-by-numSamples Mask_t* from a beta distribution defined by mean and stder.
-Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double stder);
+Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double stder, int numThreads);
 
 // Set loci between two adjacent missing loci to missing if base pair distance is <= fill.
 void apply_fill(Replicate_t* replicate, Mask_t* mask, int fill);

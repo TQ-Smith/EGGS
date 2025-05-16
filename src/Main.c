@@ -37,11 +37,11 @@ void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile f
 // Prints a record.
 // Accepts:
 //  Record_t* record -> The record we are printing out.
-//  int* mask -> If index contains MISSING, then the sample's genotype is masked out.
+//  Mask_t* mask -> If index contains MISSING, then the sample's genotype is masked out.
 //  EggsConfig_t* eggsConfig -> Defines the logic of the record manipulation.
 //  gzFile fpOut -> The output stream.
 // Returns: void.
-void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
+void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
     // If ms-replicate, then we just use chrom 1.
     if (record -> chrom == NULL) 
         gzprintf(fpOut, "chr1");
@@ -77,7 +77,7 @@ void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile 
 
     for (int i = 0; i < record -> numSamples; i++) {
         // If the genotype is masked out, then skip rest of logic.
-        if (mask != NULL && mask[i] == MISSING) {
+        if (mask != NULL && mask -> missing[i][record -> recordIndex] == MISSING) {
             record -> genotypes[i].isPhased = false;
             record -> genotypes[i].left = MISSING;
             record -> genotypes[i].right = MISSING;
@@ -138,7 +138,7 @@ void print_replicate(Replicate_t* replicate, Mask_t* mask, EggsConfig_t* eggsCon
             print_record(temp, NULL, eggsConfig, fpOut);
         else 
             // Pass the record's corresponding mask.
-            print_record(temp, mask -> missing[i], eggsConfig, fpOut);
+            print_record(temp, mask, eggsConfig, fpOut);
         temp = temp -> nextRecord;
     }
 }
@@ -193,8 +193,8 @@ int main(int argc, char* argv[]) {
             parse_vcf(maskReplicate, maskInput);
 
             // Create mask.
-            FourierCoefficients_t* fourierCoeff = init_fourier_coefficients(maskReplicate);
-            mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords);
+            FourierCoefficients_t* fourierCoeff = init_fourier_coefficients(maskReplicate, eggsConfig -> numThreads);
+            mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords, eggsConfig -> numThreads);
 
             // Destroy memory from mask replicate.
             destroy_fourier_coefficients(fourierCoeff);
@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
             // Read in whole VCF file from stdin.
             parse_vcf(replicate, inputStream);
             // Create our random mask.
-            mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
+            mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing, eggsConfig -> numThreads);
             if (eggsConfig -> fill > 0)
                 apply_fill(replicate, mask, eggsConfig -> fill);
             print_replicate(replicate, mask, eggsConfig, fpOut);
@@ -241,7 +241,7 @@ int main(int argc, char* argv[]) {
             InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile);
             Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
             parse_vcf(maskReplicate, maskInput);
-            fourierCoeff = init_fourier_coefficients(maskReplicate);
+            fourierCoeff = init_fourier_coefficients(maskReplicate, eggsConfig -> numThreads);
             destroy_input_stream(maskInput);
             destroy_replicate(maskReplicate);
         }
@@ -251,12 +251,12 @@ int main(int argc, char* argv[]) {
             Mask_t* mask = NULL;
             // Generate Fourier mask.
             if (eggsConfig -> maskFile != NULL) {
-                mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords);
+                mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords, eggsConfig -> numThreads);
                 if (eggsConfig -> fill > 0)
                     apply_fill(replicate, mask, eggsConfig -> fill);
             // Generate our random mask.
             } else if (eggsConfig -> randomMissing != NULL) {
-                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
+                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing, eggsConfig -> numThreads);
                 if (eggsConfig -> fill > 0)
                     apply_fill(replicate, mask, eggsConfig -> fill);
             }
