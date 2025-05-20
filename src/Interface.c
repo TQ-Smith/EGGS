@@ -77,7 +77,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         return -1;
     }
     // If random was given and VCF file does not exists, then parser values directly.
-    if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) == 0) {
+    if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) != 0) {
         char* meanstd = strdup(eggsConfig -> randomMissing);
         char* next  = NULL;
         eggsConfig -> meanMissing = strtod(meanstd, &next);

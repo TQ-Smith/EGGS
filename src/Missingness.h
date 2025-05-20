@@ -24,6 +24,8 @@ typedef struct {
     int numSamples;
     int numRecords;
     kiss_fft_cpx** coeff;
+    // Sorted array of indices of most powerful bins.
+    int* sortedBins;
 } FourierCoefficients_t;
 
 // NOTE: We can make Mask_t* an array of bit sets to increase efficiency.

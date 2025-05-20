@@ -26,8 +26,11 @@ src/Interace.o:
 src/GenotypeParser.o:
 	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS src/GenotypeParser.c -o src/GenotypeParser.o
 
-src/Missingness.o:
+src/Missingness.o: src/Sort.o
 	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS -DHAVE_INLINE src/Missingness.c -o src/Missingness.o
+
+src/Sort.o:
+	$(CC) $(CFLAGS) src/Sort.c -o src/Sort.o
 
 .PHONY: lib 
 lib: lib/kstring.o lib/gsl lib/kissfft

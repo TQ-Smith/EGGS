@@ -11,6 +11,13 @@
 #include <time.h>
 #include "kissfft/kiss_fftr.h"
 #include <pthread.h>
+#include "Sort.h"
+
+// Used to mutually exclude threads' access power array.
+pthread_mutex_t powerLock = PTHREAD_MUTEX_INITIALIZER;
+
+// Compute the power of a bin.
+#define MAG_SQR(coeff) (coeff.r * coeff.r + coeff.i * coeff.i)
 
 Mask_t* init_mask(int numSamples, int numRecords) {
     Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));
@@ -34,26 +41,49 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
     }
 }
 
+// Sort bins by power. Greatest to least. Quicksort.
+void sort_bins(double* avgPower, int* sortedBins, int numBins) {
+    quick_sort_bins(avgPower, sortedBins, 0, numBins - 1);
+}
+
+// Sort the first numBins from least to greatest.
+void sort_indices(int* binIndices, int numBins) {
+    quick_sort_indices(binIndices, 0, numBins - 1);
+}
+
 typedef struct {
     int startSampleIndex;
     int endSampleIndex;
     kiss_fft_scalar** inMask;
     FourierCoefficients_t* fourierCoeff;
+    double* avgPower;
 } CoeffPackage_t;
 
 void* fourier_coefficients(void* arg) {
 
     CoeffPackage_t* package = (CoeffPackage_t*) arg;
 
+    double* bins = (double*) calloc(package -> fourierCoeff -> numRecords / 2 + 1, sizeof(double));
+
     kiss_fftr_cfg kiss_fft_state = kiss_fftr_alloc(package -> fourierCoeff -> numRecords, 0, 0, 0);
     // For each sample, forward transform the signal.
     for (int i = package -> startSampleIndex; i <= package -> endSampleIndex; i++) {
         package -> fourierCoeff -> coeff[i] = (kiss_fft_cpx*) calloc(package -> fourierCoeff -> numRecords / 2 + 1, sizeof(kiss_fft_cpx));
         kiss_fftr(kiss_fft_state, package -> inMask[i], package -> fourierCoeff -> coeff[i]);
+        // Calculate average power per bin.
+        for (int j = 0; j < package -> fourierCoeff -> numRecords / 2 + 1; j++)
+            bins[j] += MAG_SQR(package -> fourierCoeff -> coeff[i][j]) / (double) package -> fourierCoeff -> numSamples;
     }
+
+    // Accumulate average power.
+    pthread_mutex_lock(&powerLock);
+    for (int i = 0; i < package -> fourierCoeff -> numRecords / 2 + 1; i++)
+        package -> avgPower[i] += bins[i];
+    pthread_mutex_unlock(&powerLock);
 
     free(kiss_fft_state);
     free(package);
+    free(bins);
 
     return NULL;
 }
@@ -97,6 +127,7 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int num
     pthread_t* threads = NULL;
     int chunkSize = fourierCoeff -> numSamples / numThreads;
     int startSampleIndex = 0;
+    double* avgPower = (double*) calloc(fourierCoeff -> numRecords / 2 + 1, sizeof(double));
 
     // Assign each thread a group of samples.
     if (numThreads > 1) {
@@ -107,6 +138,7 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int num
             package -> fourierCoeff = fourierCoeff;
             package -> startSampleIndex = startSampleIndex;
             package -> endSampleIndex = startSampleIndex + chunkSize - 1;
+            package -> avgPower = avgPower;
             pthread_create(&threads[i], NULL, fourier_coefficients, (void*) package);
             startSampleIndex += chunkSize;
         }
@@ -117,6 +149,7 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int num
     package -> fourierCoeff = fourierCoeff;
     package -> startSampleIndex = startSampleIndex;
     package -> endSampleIndex = fourierCoeff -> numSamples - 1;
+    package -> avgPower = avgPower;
     fourier_coefficients((void*) package);
 
     if (numThreads > 1) {
@@ -125,9 +158,18 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int num
         free(threads);
     }
 
+    // Initalize the sorted bins.
+    fourierCoeff -> sortedBins = (int*) calloc(fourierCoeff -> numRecords / 2 + 1, sizeof(int));
+    for (int i = 0; i < fourierCoeff -> numRecords / 2 + 1; i++)
+        fourierCoeff -> sortedBins[i] = i;
+
+    // Sort bins by power.
+    sort_bins(avgPower, fourierCoeff -> sortedBins, fourierCoeff -> numRecords / 2 + 1);
+
     for (int i = 0; i < fourierCoeff -> numSamples; i++)
         free(inMask[i]);
     free(inMask);
+    free(avgPower);
 
     return fourierCoeff;
 }
@@ -164,16 +206,23 @@ void* fourier_mask(void* arg) {
 
     for (int i = package -> startSampleIndex; i <= package -> endSampleIndex; i++) {
         for (int j = 0; j < package -> numRecords / 2 + 1; j++) {
-            // Truncate spectrum if output signal is shorter then input signal.
-            if (j <= package -> fourierCoeff -> numRecords / 2) {
-                // Randomly choose sample's Fourier coefficient.
-                int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
-                freqs[j].r = package -> fourierCoeff -> coeff[randSample][j].r;
-                freqs[j].i = package -> fourierCoeff -> coeff[randSample][j].i;
-            // Zero pad if output signal is longer than input signal.
+            // If output signal is the same size or longer than the input signal.
+            if (package -> numRecords >= package -> fourierCoeff -> numRecords) {
+                // Randomly choose sample's Fourier coefficient up unitl the Nyquist bin.
+                if (j <= package -> fourierCoeff -> numRecords / 2) {
+                    int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
+                    freqs[j].r = package -> fourierCoeff -> coeff[randSample][j].r;
+                    freqs[j].i = package -> fourierCoeff -> coeff[randSample][j].i;
+                // Zero pad if output signal is longer than input signal.
+                } else {
+                    freqs[j].r = 0;
+                    freqs[j].i = 0;
+                }
             } else {
-                freqs[j].r = 0;
-                freqs[j].i = 0;
+                // Otherwise, we are picking from the highest powered bin corresponding to the compressed signal.
+                int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
+                freqs[j].r = package -> fourierCoeff -> coeff[randSample][package -> fourierCoeff -> sortedBins[j]].r;
+                freqs[j].i = package -> fourierCoeff -> coeff[randSample][package -> fourierCoeff -> sortedBins[j]].i;
             }
         }
         // Backward transfrom.
@@ -209,6 +258,10 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
     if (numRecords % 2 == 0)
         offset = 0;
     numRecords += offset;
+
+    // if our output signal is compressed, sort the first numRecords / 2 + 1 indices from least to greatest.
+    if (numRecords < fourierCoeff -> numRecords)
+        sort_indices(fourierCoeff -> sortedBins, numRecords / 2 + 1);
 
     pthread_t* threads = NULL;
     int chunkSize = numSamples / numThreads;
@@ -386,5 +439,7 @@ void destroy_fourier_coefficients(FourierCoefficients_t* fourierCoeff) {
             free(fourierCoeff -> coeff[i]);
         free(fourierCoeff -> coeff);
     }
+    if (fourierCoeff -> sortedBins != NULL)
+        free(fourierCoeff -> sortedBins);
     free(fourierCoeff);
 }

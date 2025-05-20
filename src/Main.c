@@ -179,9 +179,9 @@ void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
     // Set mean and standard deviation.
     mean /= numRecords;
     *mu = mean;
+    *sigma = 0;
     for (int i = 0; i < numRecords; i++)
-        *sigma = (kv_A(proportions, i) - mean) * (kv_A(proportions, i) - mean);
-    *sigma /= (numRecords - 1);
+        *sigma += (kv_A(proportions, i) - mean) * (kv_A(proportions, i) - mean) / (numRecords - 1);
     *sigma = sqrt(*sigma);
 
     destroy_record(record);
@@ -206,6 +206,11 @@ int main(int argc, char* argv[]) {
         eggsConfig -> meanMissing = mu;
         eggsConfig -> stdMissing = sigma;
         destroy_input_stream(inputStream);
+        if (eggsConfig -> meanMissing >= 1 || eggsConfig -> meanMissing <= 0 || eggsConfig -> stdMissing <= 0 || eggsConfig -> stdMissing * eggsConfig -> stdMissing >= eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) {
+            fprintf(stderr, "VCF mu=%lf,sigma=%lf must satisfy parameters for a beta distribution. Exiting!\n", eggsConfig -> meanMissing, eggsConfig -> stdMissing);
+            destroy_eggs_configuration(eggsConfig);
+            return -1;
+        }
     }
 
     // Read from stdin.
