@@ -253,8 +253,8 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
 typedef struct {
     double alpha;
     double beta;
-    int startSampleIndex;
-    int endSampleIndex;
+    int startRecordIndex;
+    int endRecordIndex;
     Mask_t* mask;
 } RandomPackage_t;
 
@@ -268,20 +268,20 @@ void* random_mask(void* arg) {
     gsl_rng* r = gsl_rng_alloc(T);
     gsl_rng_set(r, time(NULL));
 
-    // Create an array from 1 to numRecords.
-    int* permu = (int*) calloc(package -> mask -> numRecords, sizeof(int));
-    for (int i = 0; i < package -> mask -> numRecords; i++)
+    // Create an array from 1 to numSamples.
+    int* permu = (int*) calloc(package -> mask -> numSamples, sizeof(int));
+    for (int i = 0; i < package -> mask -> numSamples; i++)
         permu[i] = i;
 
-    // For each sample.
-    for (int i = package -> startSampleIndex; i <= package -> endSampleIndex; i++) {
-        // Create random permutation of records.
-        shuffle_real_array(r, permu, package -> mask -> numRecords);
-        // Draw a random proportion of missing records from a beta distribution.
-        int numMissing = (int) ((package -> mask -> numRecords) * gsl_ran_beta(r, package -> alpha, package -> beta));
-        // Set records to missing for that sample.
+    // For each record in the partition.
+    for (int i = package -> startRecordIndex; i <= package -> endRecordIndex; i++) {
+        // Create random permutation of samples.
+        shuffle_real_array(r, permu, package -> mask -> numSamples);
+        // Draw a random proportion of missing samples from a beta distribution.
+        int numMissing = (int) ((package -> mask -> numSamples) * gsl_ran_beta(r, package -> alpha, package -> beta));
+        // Set missing for samples at that record.
         for (int j = 0; j < numMissing; j++)
-            package -> mask -> missing[i][permu[j]] = MISSING;
+            package -> mask -> missing[permu[j]][i] = MISSING;
     }
 
     gsl_rng_free(r);
@@ -300,11 +300,13 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double s
     double alpha = (mean * mean * (1 - mean)) / (stder * stder) - mean;
     double beta = (alpha / mean) * (1 - mean);
 
-    pthread_t* threads = NULL;
-    int chunkSize = numSamples / numThreads;
-    int startSampleIndex = 0;
+    // Unlike with the Fourier mask, we are partitioning w.r.t. records, not samples.
 
-    // Assign each thread a group of samples.
+    pthread_t* threads = NULL;
+    int chunkSize = numRecords / numThreads;
+    int startRecordIndex = 0;
+
+    // Assign each thread a partition of records.
     if (numThreads > 1) {
         threads = (pthread_t*) calloc(numThreads - 1, sizeof(pthread_t));
         for (int i = 0; i < numThreads - 1; i++) {
@@ -312,10 +314,10 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double s
             package -> alpha = alpha;
             package -> beta = beta;
             package -> mask = mask;
-            package -> startSampleIndex = startSampleIndex;
-            package -> endSampleIndex = startSampleIndex + chunkSize - 1;
+            package -> startRecordIndex = startRecordIndex;
+            package -> endRecordIndex = startRecordIndex + chunkSize - 1;
             pthread_create(&threads[i], NULL, random_mask, (void*) package);
-            startSampleIndex += chunkSize;
+            startRecordIndex += chunkSize;
         }
     }
 
@@ -323,8 +325,8 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double s
     package -> alpha = alpha;
     package -> beta = beta;
     package -> mask = mask;
-    package -> startSampleIndex = startSampleIndex;
-    package -> endSampleIndex = numSamples - 1;
+    package -> startRecordIndex = startRecordIndex;
+    package -> endRecordIndex = numRecords - 1;
     random_mask((void*) package);
 
     if (numThreads > 1) {

@@ -28,8 +28,8 @@ void print_help() {
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     fprintf(stderr, "    -m,--mask       VCF             Filename of VCF to use as mask for missing genotypes.\n");
-    fprintf(stderr, "    -r,--random     DOUBLE,DOUBLE   The mean and std. error used to introduce missing genotypes.\n");
-    fprintf(stderr, "                                        A number is drawn to determine proportion of missing sites for each sample.\n");
+    fprintf(stderr, "    -r,--random     VCF/STR         Calculate mu/sigma of missingness per site from VCF or supply as\n");
+    fprintf(stderr, "                                        values as \"mu,sigma\". Use values to randomly introduce missingness.\n");
     fprintf(stderr, "    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
     fprintf(stderr, "                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
@@ -76,8 +76,8 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
         return -1;
     }
-    // If random mean and stderr were given, parse string.
-    if (eggsConfig -> randomMissing != NULL) {
+    // If random was given and VCF file does not exists, then parser values directly.
+    if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) == 0) {
         char* meanstd = strdup(eggsConfig -> randomMissing);
         char* next  = NULL;
         eggsConfig -> meanMissing = strtod(meanstd, &next);

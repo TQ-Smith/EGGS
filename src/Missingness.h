@@ -6,8 +6,7 @@
 // Purpose: Mask out genotypes in replicates.
 
 // NOTE: I am iterating through the sample-by-record matrix a few more
-//  times than I should. Plus, it would be more efficient to store the Mask
-//  as a sample-by-record matrix. I keep it in an unoptimized form for now
+//  times than I should. I keep it in an unoptimized form for now
 //  to keep it straightforward.
 
 #ifndef MISSINGNESS_H
@@ -42,16 +41,16 @@ typedef struct {
 // Accepts:
 //  int numSamples -> The number of samples.
 //  int numRecords -> The number of records.
-// Returns: Mask_t*, a numRecords-by-numSamples integer matrix.
+// Returns: Mask_t*, a numSamples-by-numRecords integer matrix.
 Mask_t* init_mask(int numSamples, int numRecords);
 
 // Calculate the Fourier coefficients for each sample's missing genotypes in a replicate.
 FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int numThreads);
 
-// Create a numRecords-by-numSamples mask given a set of Fourier coefficients.
+// Create a numSamples-by-numRecords mask given a set of Fourier coefficients.
 Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords, int numThreads);
 
-// Create a numRecords-by-numSamples Mask_t* from a beta distribution defined by mean and stder.
+// Create a random numSamples-by-numRecords Mask_t* from a beta distribution defined by mean and stder.
 Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double stder, int numThreads);
 
 // Set loci between two adjacent missing loci to missing if base pair distance is <= fill.

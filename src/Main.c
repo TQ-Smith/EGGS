@@ -10,6 +10,7 @@
 #include "time.h"
 #include "kstring.h"
 #include "Missingness.h"
+#include "kvec.h"
 
 // Swap integer values.
 #define SWAP(a, b, temp) { a = temp; a = b; b = temp; }
@@ -20,6 +21,9 @@
 // Print a simple VCF header from a replicate.
 void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
     gzprintf(fpOut, "##fileformat=VCFv4.2\n"); 
+    // If -r was used, explicitly print values.
+    if (eggsConfig -> randomMissing != NULL)
+        gzprintf(fpOut, "##-r=%lf,%lf\n", eggsConfig -> meanMissing, eggsConfig -> stdMissing);
     // Print user command.
     gzprintf(fpOut, "##eggsCommand=%s\n", eggsConfig -> command);
     gzprintf(fpOut, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"); 
@@ -143,6 +147,48 @@ void print_replicate(Replicate_t* replicate, Mask_t* mask, EggsConfig_t* eggsCon
     }
 }
 
+// Get mu and sigma of missing genotypes per site.
+// Accepts:
+//  InputStream_t* inputStream -> The VCF file to read.
+//  double* mu -> Sets the mean per site.
+//  double* sigma -> Sets the sigma per site.
+// Returns: void.
+void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
+    Replicate_t* replicate = init_vcf_replicate(inputStream);
+    Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
+    record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
+    record -> numSamples = replicate -> numSamples;
+            
+    kvec_t(double) proportions;
+    kv_init(proportions);
+
+    double mean = 0;
+    int numRecords = 0;
+
+    // Calculate the proportion of missing samples for each locus.
+    while (get_next_vcf_record(record, inputStream)) {
+        int numMissing = 0;
+        for (int i = 0; i < record -> numSamples; i++) 
+            if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)
+                numMissing++;
+        mean += numMissing / (double) record -> numSamples;
+        kv_push(double, proportions, numMissing / (double) record -> numSamples); 
+        numRecords++;
+    }
+    
+    // Set mean and standard deviation.
+    mean /= numRecords;
+    *mu = mean;
+    for (int i = 0; i < numRecords; i++)
+        *sigma = (kv_A(proportions, i) - mean) * (kv_A(proportions, i) - mean);
+    *sigma /= (numRecords - 1);
+    *sigma = sqrt(*sigma);
+
+    destroy_record(record);
+    destroy_replicate(replicate);
+    kv_destroy(proportions);
+}
+
 int main(int argc, char* argv[]) {
 
     srand(time(NULL));
@@ -151,6 +197,16 @@ int main(int argc, char* argv[]) {
     EggsConfig_t* eggsConfig = init_eggs_configuration(argc, argv);
     if (eggsConfig == NULL)
         return -1;
+
+    // If a VCF file was given for random missingness, calculate mean and standard deviation per site.
+    if (eggsConfig -> randomMissing != NULL && eggsConfig -> meanMissing == -1 && eggsConfig -> stdMissing == -1) {
+        InputStream_t* inputStream = init_input_stream(eggsConfig -> randomMissing);
+        double mu = 0, sigma = 0;
+        get_mu_sigma(inputStream, &mu, &sigma);
+        eggsConfig -> meanMissing = mu;
+        eggsConfig -> stdMissing = sigma;
+        destroy_input_stream(inputStream);
+    }
 
     // Read from stdin.
     InputStream_t* inputStream = init_input_stream(NULL);
