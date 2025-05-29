@@ -68,7 +68,7 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
         gzprintf(fpOut, "\t%s", record -> alts);
 
     // Empty fields.
-    gzprintf(fpOut, "\t.\t.\t.\t.");
+    gzprintf(fpOut, "\t.\t.\t.\tGT");
 
     // Now, we print the genotypes.
 
