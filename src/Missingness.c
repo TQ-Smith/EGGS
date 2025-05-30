@@ -13,9 +13,6 @@
 #include <pthread.h>
 #include "Sort.h"
 
-// Compute the power of a bin.
-#define MAG_SQR(coeff) (coeff.r * coeff.r + coeff.i * coeff.i)
-
 Mask_t* init_mask(int numSamples, int numRecords) {
     Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));
     mask -> numSamples = numSamples;
@@ -39,8 +36,8 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
 }
 
 // Sort bins by power. Greatest to least. Quicksort.
-void sort_bins(double* energy, int* sortedBins, int numBins) {
-    quick_sort_bins(energy, sortedBins, 0, numBins - 1);
+void sort_bins(double* power, int* sortedBins, int numBins) {
+    quick_sort_bins(power, sortedBins, 0, numBins - 1);
 }
 
 // Sort the first numBins from least to greatest.
@@ -156,14 +153,73 @@ typedef struct {
     Mask_t* mask;
 } FourierPackage_t;
 
+#define POWER(coeff) (coeff.r * coeff.r + coeff.i * coeff.i)
+
+void compressRep(kiss_fft_cpx* rep, double* power, int* powIndSorted, kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
+
+    // Create our random replicate.
+    double totalPower = 0;
+    for (int i = 0; i < package -> fourierCoeff -> numRecords / 2 + 1; i++) {
+        int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
+        rep[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
+        rep[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
+        power[i] = POWER(rep[i]);
+        powIndSorted[i] = i;
+        if (i == 0 || i == package -> fourierCoeff -> numRecords / 2)
+            totalPower += power[i] / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+        else
+            totalPower += 2 * power[i] / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+    }
+
+    // Sort the bins and indices.
+    sort_bins(power, powIndSorted, package -> fourierCoeff -> numRecords / 2 + 1);
+
+    // Get the top bins in ascending order.
+    sort_indices(powIndSorted, package -> numRecords / 2 + 1);
+
+    // Calcuate compressed power.
+    double compPower = 0;
+    for (int i = 0; i < package -> numRecords / 2 + 1; i++)
+        if (i == 0 || i == package -> numRecords / 2)
+            compPower += POWER(rep[powIndSorted[i]]) / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+        else
+            compPower += 2 * POWER(rep[powIndSorted[i]]) / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+
+    // Calculate the variance of the white noise.
+    double varNoise = (package -> fourierCoeff -> numRecords / (double) package -> numRecords) * (package -> fourierCoeff -> numRecords * (totalPower - compPower)); 
+
+    // Add our noise to the frequencies.
+    double sigma = sqrt(varNoise / 2);
+    for (int i = 0; i < package -> numRecords / 2 + 1; i++) {
+        freqs[i].r = rep[powIndSorted[i]].r + gsl_ran_gaussian(r, sigma);
+        freqs[i].i = rep[powIndSorted[i]].i + gsl_ran_gaussian(r, sigma);
+    }
+}
+
+void stretchRep(kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
+
+    // When we stretch a signal, we are zero padding the frequency spectrum.
+    for (int i = 0; i < package -> numRecords / 2 + 1; i++) {
+        if (i <= package -> fourierCoeff -> numRecords / 2 + 1) {
+            int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
+            freqs[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
+            freqs[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
+        } else {
+            freqs[i].r = 0;
+            freqs[i].i = 0;
+        }
+    }
+
+}
+
 void* fourier_mask(void* arg) {
 
     FourierPackage_t* package = (FourierPackage_t*) arg;
 
     // Used to create the random replicate.
     kiss_fft_cpx* rep = (kiss_fft_cpx*) calloc(package -> fourierCoeff -> numRecords / 2 + 1, sizeof(kiss_fft_cpx));
-    double* energy = (double*) calloc(package -> fourierCoeff -> numRecords / 2 + 1, sizeof(double));
-    int* engIndSorted = (int*) calloc(package -> fourierCoeff -> numRecords / 2 + 1, sizeof(int));
+    double* power = (double*) calloc(package -> fourierCoeff -> numRecords / 2 + 1, sizeof(double));
+    int* powIndSorted = (int*) calloc(package -> fourierCoeff -> numRecords / 2 + 1, sizeof(int));
 
     // Used to stretch or compress replicate.
     kiss_fft_cpx* freqs = (kiss_fft_cpx*) calloc(package -> numRecords / 2 + 1, sizeof(kiss_fft_cpx));
@@ -176,10 +232,13 @@ void* fourier_mask(void* arg) {
     gsl_rng* r = gsl_rng_alloc(T);
     gsl_rng_set(r, time(NULL));
 
-    int randSample = 0;
-    double totalEnergy = 0, repEnergy = 0;
     for (int i = package -> startSampleIndex; i <= package -> endSampleIndex; i++) {
 
+        // If we are compressing or stretching the signal.
+        if (package -> numRecords < package -> fourierCoeff -> numRecords)
+            compressRep(rep, power, powIndSorted, freqs, r, package);
+        else
+            stretchRep(freqs, r, package);
         
         // Backward transfrom.
         kiss_fftri(kiss_fft_state, freqs, inv);
@@ -197,8 +256,8 @@ void* fourier_mask(void* arg) {
     }
 
     free(rep);
-    free(energy);
-    free(engIndSorted);
+    free(power);
+    free(powIndSorted);
     free(freqs);
     free(inv);
     free(kiss_fft_state);

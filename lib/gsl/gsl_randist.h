@@ -36,6 +36,10 @@ __BEGIN_DECLS
 double gsl_ran_beta (const gsl_rng * r, const double a, const double b);
 double gsl_ran_gamma (const gsl_rng * r, const double a, const double b);
 double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
+double gsl_ran_gaussian (const gsl_rng * r, const double sigma);
+double gsl_ran_gaussian_ratio_method (const gsl_rng * r, const double sigma);
+double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
+double gsl_ran_gaussian_pdf (const double x, const double sigma);
 
 __END_DECLS
 
