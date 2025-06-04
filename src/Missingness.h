@@ -50,8 +50,8 @@ FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int num
 // Create a numSamples-by-numRecords mask given a set of Fourier coefficients.
 Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords, int numThreads);
 
-// Create a random numSamples-by-numRecords Mask_t* from a beta distribution defined by mean and stder.
-Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double stder, int numThreads);
+// Create a random numSamples-by-numRecords Mask_t* from a supplied distribution or beta distribution defined by mean and stder.
+Mask_t* create_random_mask(int numSamples, int numRecords, double* distribution, int sizeOfDistribution, double mean, double stder, int numThreads);
 
 // Set loci between two adjacent missing loci to missing if base pair distance is <= fill.
 void apply_fill(Replicate_t* replicate, Mask_t* mask, int fill);

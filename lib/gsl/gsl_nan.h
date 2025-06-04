@@ -1,10 +1,10 @@
-/* gsl_types.h
+/* gsl_nan.h
  * 
- * Copyright (C) 2001 Brian Gough
+ * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2007 Gerard Jungman, Brian Gough
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or (at
+ * the Free Software Foundation; either version 3 of the License, or (at
  * your option) any later version.
  * 
  * This program is distributed in the hope that it will be useful, but
@@ -17,29 +17,31 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#ifndef __GSL_TYPES_H__
-#define __GSL_TYPES_H__
+#ifndef __GSL_NAN_H__
+#define __GSL_NAN_H__
 
-#ifndef GSL_VAR
+#include "config.h"
 
-#ifdef WIN32
-#  ifdef GSL_DLL
-#    ifdef DLL_EXPORT
-#      define GSL_VAR extern __declspec(dllexport)
-#      define GSL_EXPORT __declspec(dllexport)
-#    else
-#      define GSL_VAR extern __declspec(dllimport)
-#      define GSL_EXPORT __declspec(dllimport)
-#    endif
-#  else
-#    define GSL_VAR extern
-#    define GSL_EXPORT
-#  endif
+#ifdef INFINITY
+# define GSL_POSINF INFINITY
+# define GSL_NEGINF (-INFINITY)
+#elif defined(HUGE_VAL)
+# define GSL_POSINF HUGE_VAL
+# define GSL_NEGINF (-HUGE_VAL)
 #else
-#  define GSL_VAR extern
-#  define GSL_EXPORT
+# define GSL_POSINF (gsl_posinf())
+# define GSL_NEGINF (gsl_neginf())
 #endif
 
+#ifdef NAN
+# define GSL_NAN NAN
+#elif defined(INFINITY)
+# define GSL_NAN (INFINITY/INFINITY)
+#else
+# define GSL_NAN (gsl_nan())
 #endif
 
-#endif /* __GSL_TYPES_H__ */
+#define GSL_POSZERO (+0.0)
+#define GSL_NEGZERO (-0.0)
+
+#endif /* __GSL_NAN_H__ */

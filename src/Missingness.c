@@ -163,12 +163,12 @@ void compressRep(kiss_fft_cpx* rep, double* power, int* powIndSorted, kiss_fft_c
         int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
         rep[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
         rep[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
-        power[i] = POWER(rep[i]);
+        power[i] = POWER(rep[i]) / package -> fourierCoeff -> numRecords;
         powIndSorted[i] = i;
         if (i == 0 || i == package -> fourierCoeff -> numRecords / 2)
-            totalPower += power[i] / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+            totalPower += power[i];
         else
-            totalPower += 2 * power[i] / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+            totalPower += 2 * power[i];
     }
 
     // Sort the bins and indices.
@@ -181,34 +181,27 @@ void compressRep(kiss_fft_cpx* rep, double* power, int* powIndSorted, kiss_fft_c
     double compPower = 0;
     for (int i = 0; i < package -> numRecords / 2 + 1; i++)
         if (i == 0 || i == package -> numRecords / 2)
-            compPower += POWER(rep[powIndSorted[i]]) / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+            compPower += POWER(rep[powIndSorted[i]]) / package -> numRecords;
         else
-            compPower += 2 * POWER(rep[powIndSorted[i]]) / (double) package -> fourierCoeff -> numRecords / (double) package -> fourierCoeff -> numRecords;
+            compPower += 2 * POWER(rep[powIndSorted[i]]) / package -> numRecords;
 
-    // Calculate the variance of the white noise.
-    double varNoise = (package -> fourierCoeff -> numRecords / (double) package -> numRecords) * (package -> fourierCoeff -> numRecords * (totalPower - compPower)); 
-
-    // Add our noise to the frequencies.
-    double sigma = sqrt(varNoise / 2);
     for (int i = 0; i < package -> numRecords / 2 + 1; i++) {
-        freqs[i].r = rep[powIndSorted[i]].r + gsl_ran_gaussian(r, sigma);
-        freqs[i].i = rep[powIndSorted[i]].i + gsl_ran_gaussian(r, sigma);
+        freqs[i].r = rep[powIndSorted[i]].r;
+        freqs[i].i = rep[powIndSorted[i]].i;
     }
 }
 
-void stretchRep(kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
+void stretchRep(double* power, kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
 
-    // When we stretch a signal, we are zero padding the frequency spectrum.
-    for (int i = 0; i < package -> numRecords / 2 + 1; i++) {
-        if (i <= package -> fourierCoeff -> numRecords / 2 + 1) {
-            int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
-            freqs[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
-            freqs[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
-        } else {
-            freqs[i].r = 0;
-            freqs[i].i = 0;
-        }
+    // Create our random replicate up to Nyquist.
+    for (int i = 0; i < package -> fourierCoeff -> numRecords / 2 + 1; i++) {
+        int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
+        freqs[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
+        freqs[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
+        power[i] = POWER(freqs[i]);
     }
+
+    // Find the uniform tail of the power spectrum.
 
 }
 
@@ -238,15 +231,12 @@ void* fourier_mask(void* arg) {
         if (package -> numRecords < package -> fourierCoeff -> numRecords)
             compressRep(rep, power, powIndSorted, freqs, r, package);
         else
-            stretchRep(freqs, r, package);
+            stretchRep(power, freqs, r, package);
         
         // Backward transfrom.
         kiss_fftri(kiss_fft_state, freqs, inv);
-        // We do not need to normalize, but I have it here for completeness.
-        double normalization = package -> numRecords < package -> fourierCoeff -> numRecords ? package -> numRecords : package -> fourierCoeff -> numRecords;
-        normalization = 1 / normalization;
+        // We do not need to normalize because the sign determines the state.
         for (int j = 0; j < package -> numRecords - (package -> offset); j++) {
-            inv[j] = inv[j] / normalization;
             // If output signal is positive, then we set the mask element.
             if (inv[j] > 0)
                 package -> mask -> missing[i][j] = MISSING;
@@ -323,6 +313,8 @@ Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples,
 typedef struct {
     double alpha;
     double beta;
+    double* distribution;
+    int sizeOfDistribution;
     int startRecordIndex;
     int endRecordIndex;
     Mask_t* mask;
@@ -347,8 +339,12 @@ void* random_mask(void* arg) {
     for (int i = package -> startRecordIndex; i <= package -> endRecordIndex; i++) {
         // Create random permutation of samples.
         shuffle_real_array(r, permu, package -> mask -> numSamples);
-        // Draw a random proportion of missing samples from a beta distribution.
-        int numMissing = (int) ((package -> mask -> numSamples) * gsl_ran_beta(r, package -> alpha, package -> beta));
+        // Draw a random proportion of missing samples from a the supplied distribution or beta distribution.
+        int numMissing = 0; 
+        if (package -> distribution == NULL)
+            numMissing = (int) ((package -> mask -> numSamples) * gsl_ran_beta(r, package -> alpha, package -> beta));
+        else
+            numMissing = (int) ((package -> mask -> numSamples) * package -> distribution[(int) (package -> sizeOfDistribution * gsl_rng_uniform(r))]);
         // Set missing for samples at that record.
         for (int j = 0; j < numMissing; j++)
             package -> mask -> missing[permu[j]][i] = MISSING;
@@ -361,14 +357,18 @@ void* random_mask(void* arg) {
     return NULL;
 }
 
-Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double stder, int numThreads) {
+Mask_t* create_random_mask(int numSamples, int numRecords, double* distribution, int sizeOfDistribution, double mean, double stder, int numThreads) {
 
     // Create our mask.
     Mask_t* mask = init_mask(numSamples, numRecords);
 
     // Convert mean and stderr to alpha and beta that define a beta distribution.
-    double alpha = (mean * mean * (1 - mean)) / (stder * stder) - mean;
-    double beta = (alpha / mean) * (1 - mean);
+    double alpha = -1;
+    double beta = -1;
+    if (distribution == NULL) {
+        alpha = (mean * mean * (1 - mean)) / (stder * stder) - mean;
+        beta = (alpha / mean) * (1 - mean);
+    }
 
     // Unlike with the Fourier mask, we are partitioning w.r.t. records, not samples.
 
@@ -383,6 +383,8 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double s
             RandomPackage_t* package = calloc(1, sizeof(RandomPackage_t));
             package -> alpha = alpha;
             package -> beta = beta;
+            package -> distribution = distribution;
+            package -> sizeOfDistribution = sizeOfDistribution;
             package -> mask = mask;
             package -> startRecordIndex = startRecordIndex;
             package -> endRecordIndex = startRecordIndex + chunkSize - 1;
@@ -394,6 +396,8 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double mean, double s
     RandomPackage_t* package = calloc(1, sizeof(RandomPackage_t));
     package -> alpha = alpha;
     package -> beta = beta;
+    package -> distribution = distribution;
+    package -> sizeOfDistribution = sizeOfDistribution;
     package -> mask = mask;
     package -> startRecordIndex = startRecordIndex;
     package -> endRecordIndex = numRecords - 1;

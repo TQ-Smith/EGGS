@@ -43,17 +43,33 @@ lib/malloc_wrap.o:
 
 .PHONY: lib/gsl
 lib/gsl:
-	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gauss.c -o lib/gsl/gauss.o
-	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/beta.c -o lib/gsl/beta.o
-	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gamma.c -o lib/gsl/gamma.o
-	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gausszig.c -o lib/gsl/gausszig.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/invhyp.c -o lib/gsl/invhyp.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/fdiv.c -o lib/gsl/fdiv.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/erfc.c -o lib/gsl/erfc.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/expint.c -o lib/gsl/expint.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gamma_inc.c -o lib/gsl/gamma_inc.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/infnan.c -o lib/gsl/infnan.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/complex.c -o lib/gsl/complex.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/error.c -o lib/gsl/error.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gaussinv.c -o lib/gsl/gaussinv.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/message.c -o lib/gsl/message.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/stream.c -o lib/gsl/stream.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/default.c -o lib/gsl/default.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/rng.c -o lib/gsl/rng.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/mt.c -o lib/gsl/mt.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/types.c -o lib/gsl/types.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/pow_int.c -o lib/gsl/pow_int.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/chisqinv.c -o lib/gsl/chisqinv.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/exp.c -o lib/gsl/exp.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/elementary.c -o lib/gsl/elementary.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/zeta.c -o lib/gsl/zeta.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gammainv.c -o lib/gsl/gammainv.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/psi.c -o lib/gsl/psi.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/trig.c -o lib/gsl/trig.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/log.c -o lib/gsl/log.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/beta.c -o lib/gsl/beta.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gamma.c -o lib/gsl/gamma.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gausszig.c -o lib/gsl/gausszig.o
 
 .PHONY: lib/kissfft
 lib/kissfft:

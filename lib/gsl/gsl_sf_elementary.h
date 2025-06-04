@@ -1,6 +1,6 @@
-/* randist/gsl_randist.h
+/* specfunc/gsl_sf_elementary.h
  * 
- * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2007 James Theiler, Brian Gough
+ * Copyright (C) 1996, 1997, 1998, 1999, 2000 Gerard Jungman
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,9 +17,16 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#ifndef __GSL_RANDIST_H__
-#define __GSL_RANDIST_H__
-#include "gsl_rng.h"
+/* Author:  G. Jungman */
+
+/* Miscellaneous elementary functions and operations.
+ */
+#ifndef __GSL_SF_ELEMENTARY_H__
+#define __GSL_SF_ELEMENTARY_H__
+
+#include "gsl_sf_result.h"
+#include "gsl_math.h"
+#include "gsl_machine.h"
 
 #undef __BEGIN_DECLS
 #undef __END_DECLS
@@ -31,18 +38,29 @@
 # define __END_DECLS /* empty */
 #endif
 
+#if HAVE_EXTENDED_PRECISION_REGISTERS
+#define GSL_COERCE_DBL(x) (gsl_coerce_double(x))
+#else
+#define GSL_COERCE_DBL(x) (x)
+#endif
+
+
 __BEGIN_DECLS
 
-double gsl_ran_beta (const gsl_rng * r, const double a, const double b);
-double gsl_ran_gamma (const gsl_rng * r, const double a, const double b);
-double gsl_ran_gamma_pdf (const double x, const double a, const double b);
-double gsl_ran_gamma_int (const gsl_rng * r, const unsigned int a);
-double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_ratio_method (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_pdf (const double x, const double sigma);
+
+/* Multiplication.
+ *
+ * exceptions: GSL_EOVRFLW, GSL_EUNDRFLW
+ */
+int gsl_sf_multiply_e(const double x, const double y, gsl_sf_result * result);
+double gsl_sf_multiply(const double x, const double y);
+
+
+/* Multiplication of quantities with associated errors.
+ */
+int gsl_sf_multiply_err_e(const double x, const double dx, const double y, const double dy, gsl_sf_result * result);
+
 
 __END_DECLS
 
-#endif /* __GSL_RANDIST_H__ */
+#endif /* __GSL_SF_ELEMENTARY_H__ */

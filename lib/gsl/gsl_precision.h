@@ -1,6 +1,6 @@
-/* randist/gsl_randist.h
+/* gsl_precision.h
  * 
- * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2007 James Theiler, Brian Gough
+ * Copyright (C) 1996, 1997, 1998, 1999, 2000 Gerard Jungman
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,9 +17,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#ifndef __GSL_RANDIST_H__
-#define __GSL_RANDIST_H__
-#include "gsl_rng.h"
+/* Author:  B. Gough and G. Jungman */
+
+#ifndef __GSL_PRECISION_H__
+#define __GSL_PRECISION_H__
+#include "gsl_types.h"
 
 #undef __BEGIN_DECLS
 #undef __END_DECLS
@@ -33,16 +35,32 @@
 
 __BEGIN_DECLS
 
-double gsl_ran_beta (const gsl_rng * r, const double a, const double b);
-double gsl_ran_gamma (const gsl_rng * r, const double a, const double b);
-double gsl_ran_gamma_pdf (const double x, const double a, const double b);
-double gsl_ran_gamma_int (const gsl_rng * r, const unsigned int a);
-double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_ratio_method (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_pdf (const double x, const double sigma);
+
+/* A type for the precision indicator.
+ * This is mainly for pedagogy.
+ */
+typedef  unsigned int  gsl_prec_t;
+
+
+/* The number of precision types.
+ * Remember that precision-mode
+ * can index an array.
+ */
+#define _GSL_PREC_T_NUM 3
+
+
+/* Arrays containing derived
+ * precision constants for the
+ * different precision levels.
+ */
+GSL_VAR const double gsl_prec_eps[];
+GSL_VAR const double gsl_prec_sqrt_eps[];
+GSL_VAR const double gsl_prec_root3_eps[];
+GSL_VAR const double gsl_prec_root4_eps[];
+GSL_VAR const double gsl_prec_root5_eps[];
+GSL_VAR const double gsl_prec_root6_eps[];
+
 
 __END_DECLS
 
-#endif /* __GSL_RANDIST_H__ */
+#endif /* __GSL_PRECISION_H__ */

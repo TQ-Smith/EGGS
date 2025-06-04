@@ -14,7 +14,7 @@
 // Our help menu.
 void print_help() {
     fprintf(stderr, "\n");
-    fprintf(stderr, "EGGS v1.0 May 2025\n");
+    fprintf(stderr, "EGGS v1.0\n");
     fprintf(stderr, "------------------\n\n");
     fprintf(stderr, "Written by T. Quinn Smith\n");
     fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
@@ -28,8 +28,10 @@ void print_help() {
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     fprintf(stderr, "    -m,--mask       VCF             Filename of VCF to use as mask for missing genotypes.\n");
-    fprintf(stderr, "    -r,--random     VCF/STR         Calculate mu/sigma of missingness per site from VCF or supply as\n");
-    fprintf(stderr, "                                        values as \"mu,sigma\". Use values to randomly introduce missingness.\n");
+    fprintf(stderr, "    -b,--beta       VCF/STR         Calculate mu/sigma of missingness per site from VCF or supply as\n");
+    fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta dsitribution for missingness.\n");
+    fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from VCF and uses that\n");
+    fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
     fprintf(stderr, "    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
     fprintf(stderr, "                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
@@ -47,6 +49,7 @@ static ko_longopt_t long_options[] = {
     {"out",             ko_required_argument,   'o'},
     {"mask",            ko_required_argument,   'm'},
     {"fill",            ko_required_argument,   'f'},
+    {"beta",            ko_required_argument,   'b'},
     {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
     {"threads",         ko_required_argument,   't'},
@@ -56,19 +59,20 @@ static ko_longopt_t long_options[] = {
 // Accepts parsed parameters from user and ensures they are valid.
 // Returns: 0, if valid. -1, if invalid.
 int check_configuration(EggsConfig_t* eggsConfig) {
-    // Fill must be a positive integer.
-    if (eggsConfig -> fill < 0) {
-        fprintf(stderr, "-f must be given an integer > 0. Exiting!\n");
-        return -1;
-    }
     // If length was set by the user, it must be an integer >= 1000.
     if (eggsConfig -> length != -1 && eggsConfig -> length < 1000) {
         fprintf(stderr, "-l must be given an integer >= 1000. Exiting!\n");
         return -1;
     }
-    // Cannot use mask and random genotypes together.
-    if (eggsConfig -> randomMissing != NULL && eggsConfig -> maskFile != NULL) {
-        fprintf(stderr, "Cannot use -m and -r options together. Exiting!\n");
+    // Cannot use mask, beta, or random genotypes together.
+    int numSet = (int) (eggsConfig -> randomMissing != NULL) + (int) (eggsConfig -> maskFile != NULL) + (int) (eggsConfig -> betaMissing != NULL);
+    if (numSet > 1) {
+        fprintf(stderr, "Cannot use -m, -b, and -r options together. Exiting!\n");
+        return -1;
+    }
+    // Fill must be a positive integer.
+    if (numSet == 1 && eggsConfig -> fill < 0) {
+        fprintf(stderr, "-f must be given an integer > 0. Exiting!\n");
         return -1;
     }
     // If mask file given, make sure it exists.
@@ -76,9 +80,14 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
         return -1;
     }
-    // If random was given and VCF file does not exists, then parser values directly.
+    // If beta file given, make sure it exists.
     if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) != 0) {
-        char* meanstd = strdup(eggsConfig -> randomMissing);
+        fprintf(stderr, "-r %s does not exist. Exiting!\n", eggsConfig -> randomMissing);
+        return -1;
+    }
+    // If beta was given and VCF file does not exists, then parser values directly.
+    if (eggsConfig -> betaMissing != NULL && access(eggsConfig -> betaMissing, F_OK) != 0) {
+        char* meanstd = strdup(eggsConfig -> betaMissing);
         char* next  = NULL;
         eggsConfig -> meanMissing = strtod(meanstd, &next);
         // Ensure mean and stder were given seperated by a comma.
@@ -105,7 +114,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hupso:m:f:r:l:t:";
+    const char *opt_str = "hupso:m:f:r:l:t:b:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -126,6 +135,8 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> outFile = NULL;
     eggsConfig -> maskFile = NULL;
     eggsConfig -> fill = 0;
+    eggsConfig -> betaMissing = NULL;
+    eggsConfig -> randomMissing = NULL;
     eggsConfig -> meanMissing = -1;
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = 1000000;
@@ -143,6 +154,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'm': eggsConfig -> maskFile = strdup(options.arg); break;
             case 'f': eggsConfig -> fill = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
+            case 'b': eggsConfig -> betaMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 't': eggsConfig -> numThreads = (int) strtol(options.arg, (char**) NULL, 10); break;
         }
@@ -173,6 +185,8 @@ void destroy_eggs_configuration(EggsConfig_t* eggsConfig) {
         free(eggsConfig -> maskFile);
     if (eggsConfig -> randomMissing != NULL)
         free(eggsConfig -> randomMissing);
+    if (eggsConfig -> betaMissing != NULL)
+        free(eggsConfig -> betaMissing);
     if (eggsConfig -> command != NULL)
         free(eggsConfig -> command);
     free(eggsConfig);

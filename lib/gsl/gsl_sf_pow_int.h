@@ -1,6 +1,6 @@
-/* randist/gsl_randist.h
+/* specfunc/gsl_sf_pow_int.h
  * 
- * Copyright (C) 1996, 1997, 1998, 1999, 2000, 2007 James Theiler, Brian Gough
+ * Copyright (C) 1996, 1997, 1998, 1999, 2000 Gerard Jungman
  * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,9 +17,12 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
-#ifndef __GSL_RANDIST_H__
-#define __GSL_RANDIST_H__
-#include "gsl_rng.h"
+/* Author:  G. Jungman */
+
+#ifndef __GSL_SF_POW_INT_H__
+#define __GSL_SF_POW_INT_H__
+
+#include "gsl_sf_result.h"
 
 #undef __BEGIN_DECLS
 #undef __END_DECLS
@@ -33,16 +36,14 @@
 
 __BEGIN_DECLS
 
-double gsl_ran_beta (const gsl_rng * r, const double a, const double b);
-double gsl_ran_gamma (const gsl_rng * r, const double a, const double b);
-double gsl_ran_gamma_pdf (const double x, const double a, const double b);
-double gsl_ran_gamma_int (const gsl_rng * r, const unsigned int a);
-double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_ratio_method (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_ziggurat (const gsl_rng * r, const double sigma);
-double gsl_ran_gaussian_pdf (const double x, const double sigma);
+
+/* Calculate x^n.
+ * Does not check for overflow/underflow.
+ */
+int     gsl_sf_pow_int_e(double x, int n, gsl_sf_result * result);
+double  gsl_sf_pow_int(const double x, const int n);
+
 
 __END_DECLS
 
-#endif /* __GSL_RANDIST_H__ */
+#endif /* __GSL_SF_POW_INT_H__ */
