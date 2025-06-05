@@ -191,17 +191,35 @@ void compressRep(kiss_fft_cpx* rep, double* power, int* powIndSorted, kiss_fft_c
     }
 }
 
-void stretchRep(double* power, kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
+void stretchRep(kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
 
     // Create our random replicate up to Nyquist.
-    for (int i = 0; i < package -> fourierCoeff -> numRecords / 2 + 1; i++) {
+    double flatNum = 0;
+    double flatDenom = 0;
+    int stopBin = -1;
+    for (int i = package -> fourierCoeff -> numRecords / 2; i >= 0; i--) {
         int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
         freqs[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
         freqs[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
-        power[i] = POWER(freqs[i]);
+        // If we haven't broken our entropy threshhold, then keep calculating flatness.
+        if (stopBin == -1) {
+            double pow = POWER(freqs[i]) / (package -> fourierCoeff -> numRecords / 2 + 1);
+            flatNum += log(pow) / (package -> fourierCoeff -> numRecords / 2 + 1);
+            flatDenom += pow / (package -> fourierCoeff -> numRecords / 2 + 1);
+            if (exp(flatNum) / flatDenom < 0.9)
+                stopBin = i;
+        }
     }
 
-    // Find the uniform tail of the power spectrum.
+    // Now, fill the padded spectrum.
+    int numBins = package -> fourierCoeff -> numRecords / 2 - stopBin;
+    for (int i = package -> fourierCoeff -> numRecords / 2 + 1; i < package -> numRecords / 2 + 1; i++) {
+        int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
+        // Pick a random bin from the flat tail.
+        int randBin = (int) (numBins * gsl_rng_uniform(r));
+        freqs[i].r = package -> fourierCoeff -> coeff[randSample][package -> fourierCoeff -> numRecords / 2 - randBin].r;
+        freqs[i].i = package -> fourierCoeff -> coeff[randSample][package -> fourierCoeff -> numRecords / 2 - randBin].i;
+    }
 
 }
 
@@ -231,7 +249,7 @@ void* fourier_mask(void* arg) {
         if (package -> numRecords < package -> fourierCoeff -> numRecords)
             compressRep(rep, power, powIndSorted, freqs, r, package);
         else
-            stretchRep(power, freqs, r, package);
+            stretchRep(freqs, r, package);
         
         // Backward transfrom.
         kiss_fftri(kiss_fft_state, freqs, inv);
