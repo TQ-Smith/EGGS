@@ -155,74 +155,6 @@ typedef struct {
 
 #define POWER(coeff) (coeff.r * coeff.r + coeff.i * coeff.i)
 
-void compressRep(kiss_fft_cpx* rep, double* power, int* powIndSorted, kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
-
-    // Create our random replicate.
-    double totalPower = 0;
-    for (int i = 0; i < package -> fourierCoeff -> numRecords / 2 + 1; i++) {
-        int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
-        rep[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
-        rep[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
-        power[i] = POWER(rep[i]) / package -> fourierCoeff -> numRecords;
-        powIndSorted[i] = i;
-        if (i == 0 || i == package -> fourierCoeff -> numRecords / 2)
-            totalPower += power[i];
-        else
-            totalPower += 2 * power[i];
-    }
-
-    // Sort the bins and indices.
-    sort_bins(power, powIndSorted, package -> fourierCoeff -> numRecords / 2 + 1);
-
-    // Get the top bins in ascending order.
-    sort_indices(powIndSorted, package -> numRecords / 2 + 1);
-
-    // Calcuate compressed power.
-    double compPower = 0;
-    for (int i = 0; i < package -> numRecords / 2 + 1; i++)
-        if (i == 0 || i == package -> numRecords / 2)
-            compPower += POWER(rep[powIndSorted[i]]) / package -> numRecords;
-        else
-            compPower += 2 * POWER(rep[powIndSorted[i]]) / package -> numRecords;
-
-    for (int i = 0; i < package -> numRecords / 2 + 1; i++) {
-        freqs[i].r = rep[powIndSorted[i]].r;
-        freqs[i].i = rep[powIndSorted[i]].i;
-    }
-}
-
-void stretchRep(kiss_fft_cpx* freqs, gsl_rng* r, FourierPackage_t* package) {
-
-    // Create our random replicate up to Nyquist.
-    double flatNum = 0;
-    double flatDenom = 0;
-    int stopBin = -1;
-    for (int i = package -> fourierCoeff -> numRecords / 2; i >= 0; i--) {
-        int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
-        freqs[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
-        freqs[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
-        // If we haven't broken our entropy threshhold, then keep calculating flatness.
-        if (stopBin == -1) {
-            double pow = POWER(freqs[i]) / (package -> fourierCoeff -> numRecords / 2 + 1);
-            flatNum += log(pow) / (package -> fourierCoeff -> numRecords / 2 + 1);
-            flatDenom += pow / (package -> fourierCoeff -> numRecords / 2 + 1);
-            if (exp(flatNum) / flatDenom < 0.9)
-                stopBin = i;
-        }
-    }
-
-    // Now, fill the padded spectrum.
-    int numBins = package -> fourierCoeff -> numRecords / 2 - stopBin;
-    for (int i = package -> fourierCoeff -> numRecords / 2 + 1; i < package -> numRecords / 2 + 1; i++) {
-        int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
-        // Pick a random bin from the flat tail.
-        int randBin = (int) (numBins * gsl_rng_uniform(r));
-        freqs[i].r = package -> fourierCoeff -> coeff[randSample][package -> fourierCoeff -> numRecords / 2 - randBin].r;
-        freqs[i].i = package -> fourierCoeff -> coeff[randSample][package -> fourierCoeff -> numRecords / 2 - randBin].i;
-    }
-
-}
-
 void* fourier_mask(void* arg) {
 
     FourierPackage_t* package = (FourierPackage_t*) arg;
@@ -243,18 +175,70 @@ void* fourier_mask(void* arg) {
     gsl_rng* r = gsl_rng_alloc(T);
     gsl_rng_set(r, time(NULL));
 
+    // Are we compressing or stretching?
+    bool isCompressed = package -> numRecords < package -> fourierCoeff -> numRecords;
     for (int i = package -> startSampleIndex; i <= package -> endSampleIndex; i++) {
 
-        // If we are compressing or stretching the signal.
-        if (package -> numRecords < package -> fourierCoeff -> numRecords)
-            compressRep(rep, power, powIndSorted, freqs, r, package);
-        else
-            stretchRep(freqs, r, package);
-        
+        // Create random replicate and calculate total power.
+        double totalPower = 0;
+        for (int i = 0; i < package -> fourierCoeff -> numRecords / 2 + 1; i++) {
+            int randSample = (int) (package -> fourierCoeff -> numSamples * gsl_rng_uniform(r));
+            rep[i].r = package -> fourierCoeff -> coeff[randSample][i].r;
+            rep[i].i = package -> fourierCoeff -> coeff[randSample][i].i;
+            power[i] = POWER(rep[i]) / package -> fourierCoeff -> numRecords;
+            powIndSorted[i] = i;
+            if (i == 0 || i == package -> fourierCoeff -> numRecords / 2)
+                totalPower += power[i];
+            else
+                totalPower += 2 * power[i];
+            // If we are stretching, then we can copy right into our freqs.
+            if (!isCompressed) {
+                freqs[i].r = rep[i].r;
+                freqs[i].i = rep[i].i;
+            }
+        }
+
+        // Calculate residual power if we are compressing.
+        double residPower = 0;
+        if (isCompressed) {
+            // Sort the bins and indices.
+            sort_bins(power, powIndSorted, package -> fourierCoeff -> numRecords / 2 + 1);
+
+            // Get the top bins in ascending order.
+            sort_indices(powIndSorted, package -> numRecords / 2 + 1);
+
+            // Calcuate compressed power.
+            double compPower = 0;
+            for (int i = 0; i < package -> numRecords / 2 + 1; i++)
+                if (i == 0 || i == package -> numRecords / 2)
+                    compPower += POWER(rep[powIndSorted[i]]) / package -> fourierCoeff -> numRecords;
+                else
+                    compPower += 2 * POWER(rep[powIndSorted[i]]) / package -> fourierCoeff -> numRecords;
+            residPower = totalPower - compPower;
+
+        // If we are stretching, then we extend the tail of the power spectrum.
+        } else {
+            double amplitude = sqrt(POWER(freqs[package -> fourierCoeff -> numRecords / 2]) / package -> fourierCoeff -> numRecords);
+            for (int i = package -> fourierCoeff -> numRecords / 2 + 1; i < package -> numRecords / 2 + 1; i++) {
+                double randPhase = 2 * M_PI * gsl_rng_uniform(r);
+                freqs[i].r = amplitude * cos(randPhase);
+                freqs[i].i = amplitude * sin(randPhase);
+            }
+        }
+
         // Backward transfrom.
         kiss_fftri(kiss_fft_state, freqs, inv);
-        // We do not need to normalize because the sign determines the state.
+
+        // Our normalization constant for the inverse transform.
+        double N = package -> numRecords;
         for (int j = 0; j < package -> numRecords - (package -> offset); j++) {
+            // Normalize.
+            inv[j] = (1 / N) * inv[j];
+
+            // If we compressed, add our white noise.
+            if (isCompressed)
+                inv[j] += gsl_ran_gaussian(r, sqrt(residPower));
+
             // If output signal is positive, then we set the mask element.
             if (inv[j] > 0)
                 package -> mask -> missing[i][j] = MISSING;
