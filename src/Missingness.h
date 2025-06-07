@@ -21,9 +21,8 @@
 
 // Holds the Fourier coefficients from a replicate.
 typedef struct {
-    int numSamples;
     int numRecords;
-    kiss_fft_cpx** coeff;
+    kiss_fft_cpx* coeff;
 } FourierCoefficients_t;
 
 // NOTE: We can make Mask_t* an array of bit sets to increase efficiency.
@@ -41,17 +40,17 @@ typedef struct {
 // Accepts:
 //  int numSamples -> The number of samples.
 //  int numRecords -> The number of records.
-// Returns: Mask_t*, a numSamples-by-numRecords integer matrix.
+// Returns: Mask_t*, a numRecords-by-numSamples integer matrix.
 Mask_t* init_mask(int numSamples, int numRecords);
 
 // Calculate the Fourier coefficients for each sample's missing genotypes in a replicate.
-FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate, int numThreads);
+FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate);
 
 // Create a numSamples-by-numRecords mask given a set of Fourier coefficients.
-Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords, int numThreads);
+Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords);
 
 // Create a random numSamples-by-numRecords Mask_t* from a supplied distribution or beta distribution defined by mean and stder.
-Mask_t* create_random_mask(int numSamples, int numRecords, double* distribution, int sizeOfDistribution, double mean, double stder, int numThreads);
+Mask_t* create_random_mask(int numSamples, int numRecords, double* distribution, int sizeOfDistribution, double mean, double stder);
 
 // Set loci between two adjacent missing loci to missing if base pair distance is <= fill.
 void apply_fill(Replicate_t* replicate, Mask_t* mask, int fill);

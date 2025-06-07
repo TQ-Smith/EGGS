@@ -12,7 +12,7 @@ LFLAGS = -g -o
 
 bin/eggs: lib src
 	mkdir -p bin
-	$(CC) $(LFLAGS) bin/eggs src/*.o lib/*.o lib/gsl/*.o lib/kissfft/*.o -lz -lm -lpthread
+	$(CC) $(LFLAGS) bin/eggs src/*.o lib/*.o lib/gsl/*.o lib/kissfft/*.o -lz -lm
 
 .PHONY: src
 src: src/Main.o
@@ -26,11 +26,8 @@ src/Interace.o:
 src/GenotypeParser.o:
 	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS src/GenotypeParser.c -o src/GenotypeParser.o
 
-src/Missingness.o: src/Sort.o
+src/Missingness.o:
 	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS -DHAVE_INLINE src/Missingness.c -o src/Missingness.o
-
-src/Sort.o:
-	$(CC) $(CFLAGS) src/Sort.c -o src/Sort.o
 
 .PHONY: lib 
 lib: lib/kstring.o lib/gsl lib/kissfft

@@ -36,7 +36,6 @@ void print_help() {
     fprintf(stderr, "                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs.\n");
-    fprintf(stderr, "    -t,--threads    INT             The number of threads to use with the -m,-r options.\n");
     fprintf(stderr, "\n");
 }
 
@@ -52,7 +51,6 @@ static ko_longopt_t long_options[] = {
     {"beta",            ko_required_argument,   'b'},
     {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
-    {"threads",         ko_required_argument,   't'},
     {0, 0, 0}
 };
 
@@ -105,16 +103,12 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         }
         free(meanstd);
     }
-    if (eggsConfig -> numThreads < 1) {
-        fprintf(stderr, "-t must be given an integer >= 1. Exiting!\n");
-        return -1;
-    }
     return 0;
 }
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hupso:m:f:r:l:t:b:";
+    const char *opt_str = "hupso:m:f:r:l:b:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -140,7 +134,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> meanMissing = -1;
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = 1000000;
-    eggsConfig -> numThreads = 1;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
@@ -156,7 +149,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
             case 'b': eggsConfig -> betaMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
-            case 't': eggsConfig -> numThreads = (int) strtol(options.arg, (char**) NULL, 10); break;
         }
 	}
 

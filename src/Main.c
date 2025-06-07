@@ -21,7 +21,7 @@
 void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
     gzprintf(fpOut, "##fileformat=VCFv4.2\n"); 
     // If -r was used, explicitly print values.
-    if (eggsConfig -> randomMissing != NULL)
+    if (eggsConfig -> betaMissing != NULL)
         gzprintf(fpOut, "##-r=%lf,%lf\n", eggsConfig -> meanMissing, eggsConfig -> stdMissing);
     // Print user command.
     gzprintf(fpOut, "##eggsCommand=%s\n", eggsConfig -> command);
@@ -156,10 +156,12 @@ void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
 
     // Read the VCF file.
     Replicate_t* replicate = init_vcf_replicate(inputStream);
+    parse_vcf(replicate, inputStream);
+
     double mean = 0;
     int curRecord = 0;
     double* distribution = (double*) calloc(replicate -> numRecords, sizeof(double));
-
+    
     // Calculate the proportion of missing sampels at each record.
     for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord) {
         int numMissing = 0;
@@ -167,17 +169,16 @@ void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
             if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right == MISSING)
                 numMissing++;
         distribution[curRecord] = numMissing /  (double) replicate -> numSamples;
+        mean += distribution[curRecord] / (double) replicate -> numRecords;
         curRecord++;
     }
-    destroy_replicate(replicate);
 
-    mean /= curRecord;
     *mu = mean;
-    *sigma = 0;
+    double var = 0;
     for (int i = 0; i < curRecord; i++)
-        *sigma = (distribution[i] - mean) * (distribution[i] - mean) / (curRecord - 1);
-    *sigma = sqrt(*sigma);
-
+        var += (distribution[i] - mean) * (distribution[i] - mean) / (replicate -> numRecords - 1.0);
+    *sigma = sqrt(var);
+    
     free(distribution);
     destroy_replicate(replicate);
 }
@@ -190,6 +191,8 @@ void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
 double* get_distribution(InputStream_t* inputStream, int* numRecords) {
     // Read the VCF file.
     Replicate_t* replicate = init_vcf_replicate(inputStream);
+    parse_vcf(replicate, inputStream);
+    
     double* distribution = (double*) calloc(replicate -> numRecords, sizeof(double));
     int curRecord = 0;
     // Calculate the proportion of missing sampels at each record.
@@ -216,8 +219,8 @@ int main(int argc, char* argv[]) {
         return -1;
 
     // If a VCF file was given for random missingness, calculate mean and standard deviation per site.
-    if (eggsConfig -> randomMissing != NULL && eggsConfig -> meanMissing == -1 && eggsConfig -> stdMissing == -1) {
-        InputStream_t* inputStream = init_input_stream(eggsConfig -> randomMissing);
+    if (eggsConfig -> betaMissing != NULL && eggsConfig -> meanMissing == -1 && eggsConfig -> stdMissing == -1) {
+        InputStream_t* inputStream = init_input_stream(eggsConfig -> betaMissing);
         double mu = 0, sigma = 0;
         get_mu_sigma(inputStream, &mu, &sigma);
         eggsConfig -> meanMissing = mu;
@@ -271,8 +274,8 @@ int main(int argc, char* argv[]) {
             parse_vcf(maskReplicate, maskInput);
 
             // Create mask.
-            FourierCoefficients_t* fourierCoeff = init_fourier_coefficients(maskReplicate, eggsConfig -> numThreads);
-            mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords, eggsConfig -> numThreads);
+            FourierCoefficients_t* fourierCoeff = init_fourier_coefficients(maskReplicate);
+            mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords);
 
             // Destroy memory from mask replicate.
             destroy_fourier_coefficients(fourierCoeff);
@@ -285,7 +288,7 @@ int main(int argc, char* argv[]) {
             // Read in whole VCF file from stdin.
             parse_vcf(replicate, inputStream);
             // Create our beta mask.
-            mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, NULL, 0, eggsConfig -> meanMissing, eggsConfig -> stdMissing, eggsConfig -> numThreads);
+            mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, NULL, 0, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
         
         // If we are using a user supplied distribution.
         } else if (eggsConfig -> randomMissing != NULL) {
@@ -297,8 +300,8 @@ int main(int argc, char* argv[]) {
             InputStream_t* randInput = init_input_stream(eggsConfig -> randomMissing);
             int sizeOfDistribution = 0;
             double* distribution = get_distribution(randInput, &sizeOfDistribution);
-            mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, distribution, sizeOfDistribution, -1, -1, eggsConfig -> numThreads);
-            destroy_input_stream(inputStream);
+            mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, distribution, sizeOfDistribution, -1, -1);
+            destroy_input_stream(randInput);
             free(distribution);
 
         }
@@ -334,7 +337,7 @@ int main(int argc, char* argv[]) {
             InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile);
             Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
             parse_vcf(maskReplicate, maskInput);
-            fourierCoeff = init_fourier_coefficients(maskReplicate, eggsConfig -> numThreads);
+            fourierCoeff = init_fourier_coefficients(maskReplicate);
             destroy_input_stream(maskInput);
             destroy_replicate(maskReplicate);
         }
@@ -351,13 +354,13 @@ int main(int argc, char* argv[]) {
             Mask_t* mask = NULL;
             // Generate Fourier mask.
             if (eggsConfig -> maskFile != NULL)
-                mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords, eggsConfig -> numThreads);
+                mask = create_fourier_mask(fourierCoeff, replicate -> numSamples, replicate -> numRecords);
             // Generate our beta mask.
             else if (eggsConfig -> betaMissing != NULL) 
-                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, NULL, 0, eggsConfig -> meanMissing, eggsConfig -> stdMissing, eggsConfig -> numThreads);
+                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, NULL, 0, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
             // If user defined distribution was given.
             else if (eggsConfig -> randomMissing != NULL) 
-                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, distribution, sizeOfDistribution, -1, -1, eggsConfig -> numThreads);
+                mask = create_random_mask(replicate -> numSamples, replicate -> numRecords, distribution, sizeOfDistribution, -1, -1);
             
             if (mask != NULL && eggsConfig -> fill > 0)
                 apply_fill(replicate, mask, eggsConfig -> fill);
