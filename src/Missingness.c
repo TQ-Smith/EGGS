@@ -31,69 +31,43 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
     }
 }
 
-FourierCoefficients_t* init_fourier_coefficients(Replicate_t* replicate) {
+MissingDistribution_t* init_missing_distribution(Replicate_t* replicate) {
     if (replicate == NULL)
         return NULL;
     if (replicate -> numRecords == 0 || replicate -> numSamples == 0)
         return NULL;
 
-    // If the replicate has an odd number of records, then we append a record without missing genotypes.
-    //  We do this because the FFT for a real sequence requires an even number of elements.
-    int offset = 1;
-    if ((replicate -> numRecords) % 2 == 0)
-        offset = 0;
-
-    // Create our set of Fourier coefficients.
-    FourierCoefficients_t* fourierCoeff = (FourierCoefficients_t*) calloc(1, sizeof(FourierCoefficients_t));
-    fourierCoeff -> numRecords = replicate -> numRecords + offset;
-    fourierCoeff -> coeff = (kiss_fft_cpx*) calloc(fourierCoeff -> numRecords / 2 + 1, sizeof(kiss_fft_cpx));
-
-    kiss_fft_scalar* distribution = (kiss_fft_scalar*) calloc(fourierCoeff -> numRecords, sizeof(kiss_fft_scalar*));
-    kiss_fftr_cfg kiss_fft_state = kiss_fftr_alloc(fourierCoeff -> numRecords, 0, 0, 0);
-
-    // Calculate proportion of missingness at each locus.
+    MissingDistribution_t* dis = calloc(1, sizeof(MissingDistribution_t));
+    
+    dis -> proportions = (double*) calloc(replicate -> numRecords, sizeof(double));
     int curRecord = 0;
+    // Calculate the proportion of missing sampels at each record.
     for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++)
             if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right == MISSING)
                 numMissing++;
-        distribution[curRecord] = numMissing /  (double) replicate -> numSamples;
+        dis -> proportions[curRecord] = numMissing /  (double) replicate -> numSamples;
         curRecord++;
     }
-
-    // Inverse transform.
-    kiss_fftr(kiss_fft_state, distribution, fourierCoeff -> coeff);
-
-    free(distribution);
-    free(kiss_fft_state);
-
-    return fourierCoeff;
+    dis -> numRecords = curRecord;
+    
+    return dis;
 }
 
-Mask_t* create_fourier_mask(FourierCoefficients_t* fourierCoeff, int numSamples, int numRecords) {
-    if (fourierCoeff == NULL || numSamples == 0 || numRecords == 0)
+Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numRecords) {
+    if (dis == NULL || numSamples == 0 || numRecords == 0)
         return NULL;
 
     // Create an empty mask.
     Mask_t* mask = init_mask(numSamples, numRecords);
 
-    // Same thing. Append empty record if odd number of records given.
-    int offset = 1;
-    if (numRecords % 2 == 0)
-        offset = 0;
-    numRecords += offset;
-
-   if (numRecords < fourierCoeff -> numRecords) {
-
-   } else {
     
-   }
 
     return mask;
 }
 
-Mask_t* create_random_mask(int numSamples, int numRecords, double* distribution, int sizeOfDistribution, double mean, double stder) {
+Mask_t* create_random_mask(MissingDistribution_t* dis, int numSamples, int numRecords, double mean, double stder) {
 
     // Create our mask.
     Mask_t* mask = init_mask(numSamples, numRecords);
@@ -101,7 +75,7 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double* distribution,
     // Convert mean and stderr to alpha and beta that define a beta distribution.
     double alpha = -1;
     double beta = -1;
-    if (distribution == NULL) {
+    if (dis == NULL) {
         alpha = (mean * mean * (1 - mean)) / (stder * stder) - mean;
         beta = (alpha / mean) * (1 - mean);
     }
@@ -123,10 +97,10 @@ Mask_t* create_random_mask(int numSamples, int numRecords, double* distribution,
         shuffle_real_array(r, permu, numSamples);
         // Draw a random proportion of missing samples from a the supplied distribution or beta distribution.
         int numMissing = 0; 
-        if (distribution == NULL)
+        if (dis == NULL)
             numMissing = (int) numSamples * gsl_ran_beta(r, alpha, beta);
         else
-            numMissing = (int) numSamples * distribution[(int) (sizeOfDistribution * gsl_rng_uniform(r))];
+            numMissing = (int) numSamples * dis -> proportions[(int) (dis -> numRecords * gsl_rng_uniform(r))];
 
         // Set missing for samples at that record.
         for (int j = 0; j < numMissing; j++)
@@ -179,10 +153,10 @@ void destroy_mask(Mask_t* mask) {
     free(mask);
 }
 
-void destroy_fourier_coefficients(FourierCoefficients_t* fourierCoeff) {
-    if (fourierCoeff == NULL)
+void destroy_missing_distribution(MissingDistribution_t* dis) {
+    if (dis == NULL)
         return;
-    if (fourierCoeff -> coeff != NULL)
-        free(fourierCoeff -> coeff);
-    free(fourierCoeff);
+    if (dis -> proportions != NULL)
+        free(dis -> proportions);
+    free(dis);
 }
