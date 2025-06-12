@@ -9,7 +9,6 @@
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 #include <time.h>
-#include "kissfft/kiss_fftr.h"
 
 Mask_t* init_mask(int numSamples, int numRecords) {
     Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));

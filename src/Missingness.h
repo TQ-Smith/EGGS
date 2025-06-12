@@ -12,18 +12,7 @@
 #ifndef MISSINGNESS_H
 #define MISSINGNESS_H
 
-#ifdef USE_MALLOC_WRAPPERS
-#  include "malloc_wrap.h"
-#endif
-
 #include "GenotypeParser.h"
-#include "kissfft/kiss_fft.h"
-
-// Holds the Fourier coefficients from a replicate.
-typedef struct {
-    int numRecords;
-    kiss_fft_cpx* coeff;
-} FourierCoefficients_t;
 
 // NOTE: We can make Mask_t* an array of bit sets to increase efficiency.
 

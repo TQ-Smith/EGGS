@@ -8,10 +8,6 @@
 #ifndef GENOTYPE_PARSER_H
 #define GENOTYPE_PARSER_H
 
-#ifdef USE_MALLOC_WRAPPERS
-#  include "malloc_wrap.h"
-#endif
-
 #include <stdbool.h>
 #include "kseq.h"
 #include <zlib.h>

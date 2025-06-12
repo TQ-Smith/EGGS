@@ -18,25 +18,22 @@ bin/eggs: lib src
 src: src/Main.o
 
 src/Main.o: src/Interace.o src/GenotypeParser.o src/Missingness.o
-	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS src/Main.c -o src/Main.o
+	$(CC) $(CFLAGS) src/Main.c -o src/Main.o
 
 src/Interace.o:
-	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS src/Interface.c -o src/Interace.o
+	$(CC) $(CFLAGS) src/Interface.c -o src/Interace.o
 
 src/GenotypeParser.o:
-	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS src/GenotypeParser.c -o src/GenotypeParser.o
+	$(CC) $(CFLAGS) src/GenotypeParser.c -o src/GenotypeParser.o
 
 src/Missingness.o:
-	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS -DHAVE_INLINE src/Missingness.c -o src/Missingness.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE src/Missingness.c -o src/Missingness.o
 
 .PHONY: lib 
-lib: lib/kstring.o lib/gsl lib/kissfft
+lib: lib/kstring.o lib/gsl 
 
-lib/kstring.o: lib/malloc_wrap.o
-	$(CC) $(CFLAGS) -DUSE_MALLOC_WRAPPERS lib/kstring.c -o lib/kstring.o
-
-lib/malloc_wrap.o:
-	$(CC) $(CFLAGS) lib/malloc_wrap.c -o lib/malloc_wrap.o
+lib/kstring.o: 
+	$(CC) $(CFLAGS) lib/kstring.c -o lib/kstring.o
 
 .PHONY: lib/gsl
 lib/gsl:
@@ -52,14 +49,6 @@ lib/gsl:
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gamma.c -o lib/gsl/gamma.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gausszig.c -o lib/gsl/gausszig.o
 
-.PHONY: lib/kissfft
-lib/kissfft:
-	$(CC) $(CFLAGS) lib/kissfft/kfc.c -o lib/kissfft/kfc.o
-	$(CC) $(CFLAGS) lib/kissfft/kiss_fft.c -o lib/kissfft/kiss_fft.o
-	$(CC) $(CFLAGS) lib/kissfft/kiss_fftnd.c -o lib/kissfft/kiss_fftnd.o
-	$(CC) $(CFLAGS) lib/kissfft/kiss_fftndr.c -o lib/kissfft/kiss_fftndr.o
-	$(CC) $(CFLAGS) lib/kissfft/kiss_fftr.c -o lib/kissfft/kiss_fftr.o
-
 .PHONY: clean
 clean:
-	rm lib/*.o src/*.o lib/gsl/*.o lib/kissfft/*.o bin/eggs
+	rm lib/*.o src/*.o lib/gsl/*.o bin/eggs
