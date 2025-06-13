@@ -60,6 +60,8 @@ lib/wavelib:
 	$(CC) $(CFLAGS) lib/wavelib/wavefunc.c -o lib/wavelib/wavefunc.o
 	$(CC) $(CFLAGS) lib/wavelib/wavelib.c -o lib/wavelib/wavelib.o
 	$(CC) $(CFLAGS) lib/wavelib/wtmath.c -o lib/wavelib/wtmath.o
+	$(CC) $(CFLAGS) lib/wavelib/denoise.c -o lib/wavelib/denoise.o
+	$(CC) $(CFLAGS) lib/wavelib/waux.c -o lib/wavelib/waux.o
 
 .PHONY: clean
 clean:

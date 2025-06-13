@@ -8,7 +8,9 @@
 #include "Missingness.h"
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
+#include "wavelib/wauxlib.h"
 #include <time.h>
+#include <math.h>
 
 Mask_t* init_mask(int numSamples, int numRecords) {
     Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));
@@ -62,7 +64,33 @@ Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numR
     // Create an empty mask.
     Mask_t* mask = init_mask(numSamples, numRecords);
 
-    
+    double* proportions = calloc(numRecords, sizeof(double));
+
+    gsl_rng_env_setup();
+    const gsl_rng_type* T = gsl_rng_default;
+    gsl_rng* r = gsl_rng_alloc(T);
+    gsl_rng_set(r, time(NULL));
+
+    int* permu = (int*) calloc(numSamples, sizeof(int));
+    for (int i = 0; i < numSamples; i++)
+        permu[i] = i;
+
+    if (numRecords <= dis -> numRecords) {
+        
+    } else {
+
+    }
+
+    for (int i = 0; i < numRecords; i++) {
+        shuffle_real_array(r, permu, numSamples);
+        int numMissing = (int) numSamples * proportions[i];
+        for (int j = 0; j < numMissing; j++)
+            mask -> missing[i][permu[j]] = MISSING;
+    }
+
+    free(proportions);
+    gsl_rng_free(r);
+    free(permu);
 
     return mask;
 }
