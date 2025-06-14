@@ -12,7 +12,7 @@ LFLAGS = -g -o
 
 bin/eggs: lib src
 	mkdir -p bin
-	$(CC) $(LFLAGS) bin/eggs src/*.o lib/*.o lib/gsl/*.o lib/wavelib/*.o -lz -lm
+	$(CC) $(LFLAGS) bin/eggs src/*.o lib/*.o lib/gsl/*.o -lz -lm
 
 .PHONY: src
 src: src/Main.o
@@ -30,7 +30,7 @@ src/Missingness.o:
 	$(CC) $(CFLAGS) -DHAVE_INLINE src/Missingness.c -o src/Missingness.o
 
 .PHONY: lib 
-lib: lib/kstring.o lib/gsl lib/wavelib
+lib: lib/kstring.o lib/gsl
 
 lib/kstring.o: 
 	$(CC) $(CFLAGS) lib/kstring.c -o lib/kstring.o
@@ -47,22 +47,7 @@ lib/gsl:
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gauss.c -o lib/gsl/gauss.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/beta.c -o lib/gsl/beta.o
 	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gamma.c -o lib/gsl/gamma.o
-	$(CC) $(CFLAGS) -DHAVE_INLINE lib/gsl/gausszig.c -o lib/gsl/gausszig.o
-
-.PHONY: lib/wavelib
-lib/wavelib:
-	$(CC) $(CFLAGS) lib/wavelib/conv.c -o lib/wavelib/conv.o
-	$(CC) $(CFLAGS) lib/wavelib/cwt.c -o lib/wavelib/cwt.o
-	$(CC) $(CFLAGS) lib/wavelib/cwtmath.c -o lib/wavelib/cwtmath.o
-	$(CC) $(CFLAGS) lib/wavelib/hsfft.c -o lib/wavelib/hsfft.o
-	$(CC) $(CFLAGS) lib/wavelib/real.c -o lib/wavelib/real.o
-	$(CC) $(CFLAGS) lib/wavelib/wavefilt.c -o lib/wavelib/wavefilt.o
-	$(CC) $(CFLAGS) lib/wavelib/wavefunc.c -o lib/wavelib/wavefunc.o
-	$(CC) $(CFLAGS) lib/wavelib/wavelib.c -o lib/wavelib/wavelib.o
-	$(CC) $(CFLAGS) lib/wavelib/wtmath.c -o lib/wavelib/wtmath.o
-	$(CC) $(CFLAGS) lib/wavelib/denoise.c -o lib/wavelib/denoise.o
-	$(CC) $(CFLAGS) lib/wavelib/waux.c -o lib/wavelib/waux.o
 
 .PHONY: clean
 clean:
-	rm lib/*.o src/*.o lib/gsl/*.o lib/wavelib/*.o bin/eggs
+	rm lib/*.o src/*.o lib/gsl/*.o bin/eggs

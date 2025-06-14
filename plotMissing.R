@@ -1,5 +1,5 @@
 
-# File: plotMiss.R
+# File: plotMissing.R
 # Date: 29 May 2025
 # Author: T. Quinn Smith
 # Principal Investigator: Zachary A. Szpiech
@@ -7,6 +7,7 @@
 
 library(vcfR, quietly = TRUE, warn.conflicts = FALSE);
 library(ggplot2, quietly = TRUE, warn.conflicts = FALSE);
+library(scales, quietly = TRUE, warn.conflicts = FALSE);
 
 # The name of VCF file is the only arg.
 args <- commandArgs(trailingOnly = TRUE);
@@ -23,26 +24,26 @@ is_missing <- function(x) (is.na(x) | x == "./." | x == ".|.");
 missing_prop <- apply(gt, 1, function(row) {mean(is_missing(row))});
 
 # Create a dataframe with locus number and its associated proportion.
-plot_data <- data.frame(Locus = 1:length(missing_prop), MissingProportion = missing_prop);
+plot_data <- data.frame(Locus = factor(1:length(missing_prop)), MissingProportion = missing_prop);
 
 if (args[1] == "bar") {
 
     # Create plot from dataframe.
-    p <- ggplot(plot_data, aes(x = factor(Locus), y = MissingProportion)) +
+    p <- ggplot(plot_data, aes(x = Locus, y = MissingProportion)) +
         geom_bar(stat = "identity", color = "blue") +
+        scale_x_discrete(breaks = seq(1, length(missing_prop), as.integer(length(missing_prop) / 10))) +
         labs(
             title = "Proportion of Missing Samples Per Locus",
-            x = "Locus",
+            x = "Record",
             y = "Proportion"
         ) +
+        ylim(0, 1) +
         theme( 
             text = element_text(size = 12),
             legend.position="none",
-            panel.border = element_blank(),
-            panel.grid.major.x = element_blank(),
-            panel.grid.minor.x = element_blank()
+            panel.border = element_blank()
         ) +
-        theme(axis.text.x = element_blank());
+        theme();
 
     # Save our plot.
     ggsave(paste(args[2], "_bar.png", sep = ""), plot = p, width = 15, height = 5, dpi = 300);

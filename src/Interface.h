@@ -26,8 +26,6 @@ typedef struct {
     char* outFile;
     // The mask file name.
     char* maskFile;
-    // The fill width in base pairs.
-    int fill;
     // The string defining the VCF or mean and std. dev. for beta distribution.
     char* betaMissing;
     // The VCF file for to calculate the distribution of missing genotypes.

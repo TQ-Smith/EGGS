@@ -81,7 +81,7 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
 
     for (int i = 0; i < record -> numSamples; i++) {
         // If the genotype is masked out, then skip rest of logic.
-        if (mask != NULL && mask -> missing[i][record -> recordIndex] == MISSING) {
+        if (mask != NULL && mask -> missing[record -> recordIndex][i] == MISSING) {
             record -> genotypes[i].isPhased = false;
             record -> genotypes[i].left = MISSING;
             record -> genotypes[i].right = MISSING;
@@ -222,17 +222,7 @@ int main(int argc, char* argv[]) {
         } else {
             fpOut = gzdopen(fileno(stdout), "w");
         }
-
-        // Read VCF header from stdin.
-        Replicate_t* replicate = init_vcf_replicate(inputStream);
-        print_vcf_header(replicate, eggsConfig, fpOut);
-
-        // Our mask.
-        Mask_t* mask = NULL;
-
-        // If a mask file was given.
-        if (eggsConfig -> maskFile != NULL || eggsConfig -> randomMissing != NULL) {
-
+        proportions[j] = uniform(r, dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1]);
             // Read in whole VCF file from stdin.
             parse_vcf(replicate, inputStream);
 
@@ -241,13 +231,13 @@ int main(int argc, char* argv[]) {
             Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
             parse_vcf(maskReplicate, maskInput);
 
+            // Calculate proportion of missing samples at each site.
             MissingDistribution_t* dis = init_missing_distribution(maskReplicate);
-
-            if (eggsConfig -> maskFile != NULL) {
+            
+            if (eggsConfig -> maskFile != NULL)
                 mask = create_missing_mask(dis, replicate -> numSamples, replicate -> numRecords);
-            } else {
+            else 
                 mask = create_random_mask(dis, replicate -> numSamples, replicate -> numRecords, -1, -1);
-            }
             
             destroy_input_stream(maskInput);
             destroy_replicate(maskReplicate);
@@ -272,9 +262,6 @@ int main(int argc, char* argv[]) {
                 print_record(record, NULL, eggsConfig, fpOut);
             destroy_record(record);
         } else {
-            // If a fill was specified, then fill.
-            if (eggsConfig -> fill > 0)
-                apply_fill(replicate, mask, eggsConfig -> fill);
             print_replicate(replicate, mask, eggsConfig, fpOut);
         }
         
@@ -307,9 +294,6 @@ int main(int argc, char* argv[]) {
             // If user defined distribution was given.
             else if (eggsConfig -> randomMissing != NULL) 
                 mask = create_random_mask(dis, replicate -> numSamples, replicate -> numRecords, -1, -1);
-            
-            if (mask != NULL && eggsConfig -> fill > 0)
-                apply_fill(replicate, mask, eggsConfig -> fill);
             
             gzFile fpOut;
             // If no basename given and only one replicate, then we print to stdout.

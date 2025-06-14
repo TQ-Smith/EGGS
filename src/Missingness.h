@@ -16,6 +16,7 @@
 
 // NOTE: We can make Mask_t* an array of bit sets to increase efficiency.
 
+// The proportion of missing samples at each site.
 typedef struct {
     double* proportions;
     int numRecords;
@@ -37,18 +38,27 @@ typedef struct {
 // Returns: Mask_t*, a numRecords-by-numSamples integer matrix.
 Mask_t* init_mask(int numSamples, int numRecords);
 
+// Calculate the proportion of missing samples at each site.
+// Accepts:
+//  Recplicate_t* replicate -> A replicate read into memory.
+// Returns: MissingDistribution_t*, the proportion of samples missing at each site.
 MissingDistribution_t* init_missing_distribution(Replicate_t* replicate);
 
+// Create a mask by replicating the structure of missingness.
+// Accepts:
+//  MissingDistribution_t* dis -> The proportion of missingness across samples.
+//  int numSamples -> The number of samples in the mask.
+//  int numRecords -> The number of records in the mask.
+// Returns: Mask_t*, the created mask.
 Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numRecords);
 
+// Randomly create a mask from a predefined distribution or from the beta distribution defined by mean and stder.
 Mask_t* create_random_mask(MissingDistribution_t* dis, int numSamples, int numRecords, double mean, double stder);
-
-// Set loci between two adjacent missing loci to missing if base pair distance is <= fill.
-void apply_fill(Replicate_t* replicate, Mask_t* mask, int fill);
 
 // Free memory associated with mask.
 void destroy_mask(Mask_t* mask);
 
+// Free the distribution structure.
 void destroy_missing_distribution(MissingDistribution_t* dis);
 
 #endif

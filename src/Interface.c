@@ -32,8 +32,6 @@ void print_help() {
     fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta dsitribution for missingness.\n");
     fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from VCF and uses that\n");
     fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
-    fprintf(stderr, "    -f,--fill       INT             Used with -m/-r. If distance (in base-paris) between missing\n");
-    fprintf(stderr, "                                        sites is <= INT, then sample's genotypes between are set to missing.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs.\n");
     fprintf(stderr, "\n");
@@ -47,7 +45,6 @@ static ko_longopt_t long_options[] = {
     {"pseudohap",       ko_no_argument,         's'},
     {"out",             ko_required_argument,   'o'},
     {"mask",            ko_required_argument,   'm'},
-    {"fill",            ko_required_argument,   'f'},
     {"beta",            ko_required_argument,   'b'},
     {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
@@ -66,11 +63,6 @@ int check_configuration(EggsConfig_t* eggsConfig) {
     int numSet = (int) (eggsConfig -> randomMissing != NULL) + (int) (eggsConfig -> maskFile != NULL) + (int) (eggsConfig -> betaMissing != NULL);
     if (numSet > 1) {
         fprintf(stderr, "Cannot use -m, -b, and -r options together. Exiting!\n");
-        return -1;
-    }
-    // Fill must be a positive integer.
-    if (numSet == 1 && eggsConfig -> fill < 0) {
-        fprintf(stderr, "-f must be given an integer > 0. Exiting!\n");
         return -1;
     }
     // If mask file given, make sure it exists.
@@ -108,7 +100,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hupso:m:f:r:l:b:";
+    const char *opt_str = "hupso:m:r:l:b:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -128,7 +120,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> pseudohap = false;
     eggsConfig -> outFile = NULL;
     eggsConfig -> maskFile = NULL;
-    eggsConfig -> fill = 0;
     eggsConfig -> betaMissing = NULL;
     eggsConfig -> randomMissing = NULL;
     eggsConfig -> meanMissing = -1;
@@ -145,7 +136,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 's': eggsConfig -> pseudohap = true; break;
             case 'o': eggsConfig -> outFile = strdup(options.arg); break;
             case 'm': eggsConfig -> maskFile = strdup(options.arg); break;
-            case 'f': eggsConfig -> fill = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
             case 'b': eggsConfig -> betaMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;

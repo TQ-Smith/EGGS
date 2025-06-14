@@ -8,9 +8,12 @@
 #include "Missingness.h"
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
-#include "wavelib/wauxlib.h"
 #include <time.h>
 #include <math.h>
+
+double uniform(gsl_rng* r, double min, double max) {
+    return min + (max - min) * (double) gsl_rng_uniform(r);
+}
 
 Mask_t* init_mask(int numSamples, int numRecords) {
     Mask_t* mask = (Mask_t*) calloc(1, sizeof(Mask_t));
@@ -75,17 +78,54 @@ Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numR
     for (int i = 0; i < numSamples; i++)
         permu[i] = i;
 
-    if (numRecords <= dis -> numRecords) {
-        
+    // If we are shrinking the dispersal
+    if (numRecords < dis -> numRecords) {
+        int chunkSize = dis -> numRecords / numRecords;
+        int nextChunk = 0;
+        // Randomly choose a proportion of missingess from the chunk of sites.
+        for (int i = 0; i < numRecords - 1; i++) {
+            proportions[i] = dis -> proportions[nextChunk + gsl_rng_uniform_int(r, chunkSize)];
+            nextChunk += chunkSize;
+        }
+        proportions[numRecords - 1] = dis -> proportions[nextChunk + gsl_rng_uniform_int(r, dis -> numRecords - nextChunk)];
+    // If it is the same size.
+    } else if (numRecords == dis -> numRecords) {
+        for (int i = 0; i < numRecords; i++)
+            proportions[i] = dis -> proportions[i];
+    // If we are stretching the dispersal
     } else {
-
+        int chunkSize = numRecords / dis -> numRecords;
+        int nextChunk = 0;
+        // For each chunk, take two adjacent sites and randomly get a proportion between the two bounds.
+        for (int i = 0; i < dis -> numRecords - 1; i++) {
+            for (int j = 0; j < chunkSize; j++)
+                if (dis -> proportions[i] <= dis -> proportions[i + 1])
+                    proportions[nextChunk + j] = uniform(r, dis -> proportions[i], dis -> proportions[i + 1]);
+                else 
+                    proportions[nextChunk + j] = uniform(r, dis -> proportions[i + 1], dis -> proportions[i]);
+            nextChunk += chunkSize;
+        }
+        // We model the last chunk after the last two sites.
+        for (int j = nextChunk; j < numRecords; j++)
+            if (dis -> proportions[dis -> numRecords - 2] <= dis -> proportions[dis -> numRecords - 1])
+                proportions[j] = uniform(r, dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1]);
+            else 
+                proportions[j] = uniform(r, dis -> proportions[dis -> numRecords - 1], dis -> proportions[dis -> numRecords - 2]);
     }
 
+    // Randomly introduce missingness to the samples at each site.
     for (int i = 0; i < numRecords; i++) {
-        shuffle_real_array(r, permu, numSamples);
-        int numMissing = (int) numSamples * proportions[i];
-        for (int j = 0; j < numMissing; j++)
-            mask -> missing[i][permu[j]] = MISSING;
+        if (proportions[i] == 0)
+            continue;
+        else if (proportions[i] == 1)
+            for (int j = 0; j < numSamples; j++)
+                mask -> missing[i][permu[j]] = MISSING;
+        else {
+            shuffle_real_array(r, permu, numSamples);
+            int numMissing = (int) numSamples * proportions[i];
+            for (int j = 0; j < numMissing; j++)
+                mask -> missing[i][permu[j]] = MISSING;
+        }
     }
 
     free(proportions);
@@ -139,35 +179,6 @@ Mask_t* create_random_mask(MissingDistribution_t* dis, int numSamples, int numRe
     free(permu);
 
     return mask;
-}
-
-void apply_fill(Replicate_t* replicate, Mask_t* mask, int fill) {
-    Record_t* prevMisRecord = NULL;
-    Record_t* temp = NULL;
-    int prevMisGenoPos = -1;
-    
-    // For each sample.
-    for (int i = 0; i < mask -> numSamples; i++) { 
-        temp = replicate -> headRecord;
-        prevMisRecord = NULL;
-        // Iterate through the records.
-        for (int j = 0; j < mask -> numRecords; j++) {
-            if (mask -> missing[j][i] == MISSING) {
-                // If the previous missing genotype for the sample is <= fill, set genotypes inbetween the
-                //  two sites to missing.
-                if (prevMisRecord != NULL && (temp -> position - prevMisGenoPos) <= fill) {
-                    for (Record_t* k = prevMisRecord -> nextRecord; k != temp; k = k -> nextRecord) {
-                        k -> genotypes[i].isPhased = false;
-                        k -> genotypes[i].left = MISSING;
-                        k -> genotypes[i].right = MISSING;
-                    }
-                }
-                prevMisGenoPos = temp -> position;
-                prevMisRecord = temp;
-            }
-            temp = temp -> nextRecord;
-        }
-    }
 }
 
 void destroy_mask(Mask_t* mask) {
