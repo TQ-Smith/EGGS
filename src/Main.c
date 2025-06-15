@@ -7,10 +7,10 @@
 
 #include "Interface.h"
 #include "GenotypeParser.h"
-#include "time.h"
 #include "kstring.h"
 #include "Missingness.h"
 #include <math.h>
+#include <time.h>
 
 // Swap integer values.
 #define SWAP(a, b, temp) { a = temp; a = b; b = temp; }
@@ -222,18 +222,20 @@ int main(int argc, char* argv[]) {
         } else {
             fpOut = gzdopen(fileno(stdout), "w");
         }
-        proportions[j] = uniform(r, dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1]);
-            // Read in whole VCF file from stdin.
-            parse_vcf(replicate, inputStream);
+
+        Mask_t* mask = NULL;
+        Replicate_t* replicate = init_vcf_replicate(inputStream);
+        parse_vcf(replicate, inputStream);
+        
+        if (eggsConfig -> maskFile != NULL || eggsConfig -> randomMissing != NULL) {
 
             // Read in mask file.
-            InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile);
+            InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile != NULL ? eggsConfig -> maskFile : eggsConfig -> randomMissing);
             Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
             parse_vcf(maskReplicate, maskInput);
 
             // Calculate proportion of missing samples at each site.
             MissingDistribution_t* dis = init_missing_distribution(maskReplicate);
-            
             if (eggsConfig -> maskFile != NULL)
                 mask = create_missing_mask(dis, replicate -> numSamples, replicate -> numRecords);
             else 
@@ -242,16 +244,14 @@ int main(int argc, char* argv[]) {
             destroy_input_stream(maskInput);
             destroy_replicate(maskReplicate);
             destroy_missing_distribution(dis);
-        
         // If we want to create a beta mask.
         } else if (eggsConfig -> betaMissing != NULL) {
-
-            // Read in whole VCF file from stdin.
-            parse_vcf(replicate, inputStream);
             // Create our beta mask.
             mask = create_random_mask(NULL, replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
 
         } 
+
+        print_vcf_header(replicate, eggsConfig, fpOut);
 
         // If no mask was created, then we can just sequentually print records out.
         if (mask == NULL) {
@@ -275,7 +275,7 @@ int main(int argc, char* argv[]) {
         MissingDistribution_t* dis = NULL;
 
         if (eggsConfig -> maskFile != NULL || eggsConfig -> randomMissing != NULL) {
-            InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile);
+            InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile != NULL ? eggsConfig -> maskFile : eggsConfig -> randomMissing);
             Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
             parse_vcf(maskReplicate, maskInput);
             dis = init_missing_distribution(maskReplicate);

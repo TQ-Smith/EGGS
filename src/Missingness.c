@@ -79,7 +79,7 @@ Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numR
         permu[i] = i;
 
     // If we are shrinking the dispersal
-    if (numRecords < dis -> numRecords) {
+    if (numRecords <= dis -> numRecords) {
         int chunkSize = dis -> numRecords / numRecords;
         int nextChunk = 0;
         // Randomly choose a proportion of missingess from the chunk of sites.
@@ -88,10 +88,6 @@ Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numR
             nextChunk += chunkSize;
         }
         proportions[numRecords - 1] = dis -> proportions[nextChunk + gsl_rng_uniform_int(r, dis -> numRecords - nextChunk)];
-    // If it is the same size.
-    } else if (numRecords == dis -> numRecords) {
-        for (int i = 0; i < numRecords; i++)
-            proportions[i] = dis -> proportions[i];
     // If we are stretching the dispersal
     } else {
         int chunkSize = numRecords / dis -> numRecords;
