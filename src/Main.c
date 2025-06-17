@@ -20,10 +20,11 @@
 
 // Print a simple VCF header from a replicate.
 void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
-    gzprintf(fpOut, "##fileformat=VCFv4.2\n"); 
+    gzprintf(fpOut, "##fileformat=VCFv4.2\n");
+    gzprintf(fpOut, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"); 
     // If -r was used, explicitly print values.
     if (eggsConfig -> betaMissing != NULL)
-        gzprintf(fpOut, "##-r=%lf,%lf\n", eggsConfig -> meanMissing, eggsConfig -> stdMissing);
+        gzprintf(fpOut, "##-b=%lf,%lf\n", eggsConfig -> meanMissing, eggsConfig -> stdMissing);
     // Print user command.
     gzprintf(fpOut, "##eggsCommand=%s\n", eggsConfig -> command);
     gzprintf(fpOut, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"); 

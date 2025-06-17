@@ -90,7 +90,7 @@ Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numR
         proportions[numRecords - 1] = dis -> proportions[nextChunk + gsl_rng_uniform_int(r, dis -> numRecords - nextChunk)];
     // If we are stretching the dispersal
     } else {
-        int chunkSize = numRecords / dis -> numRecords;
+        int chunkSize = (int) (numRecords / (double) dis -> numRecords + 1);
         int nextChunk = 0;
         // For each chunk, take two adjacent sites and randomly get a proportion between the two bounds.
         for (int i = 0; i < dis -> numRecords - 1; i++) {

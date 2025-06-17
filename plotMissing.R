@@ -31,7 +31,7 @@ if (args[1] == "bar") {
     # Create plot from dataframe.
     p <- ggplot(plot_data, aes(x = Locus, y = MissingProportion)) +
         geom_bar(stat = "identity", color = "blue") +
-        scale_x_discrete(breaks = seq(1, length(missing_prop), as.integer(length(missing_prop) / 10))) +
+        scale_x_discrete(breaks = seq(0, as.integer(round(length(plot_data$MissingProportion) / 1000 + 1) * 1000), by = 1000)) +
         labs(
             title = "Proportion of Missing Samples Per Locus",
             x = "Record",
