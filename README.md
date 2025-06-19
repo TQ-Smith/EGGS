@@ -3,7 +3,7 @@
 
 ## How Do You Like Your Genotypes?
 
-The manual can be found at [https://github.com/TQ-Smith/EGGS/wiki/EGGS-Manual]
+The manual can be found at [https://github.com/TQ-Smith/EGGS/wiki]
 
 ## License 
 

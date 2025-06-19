@@ -35,6 +35,8 @@ typedef struct {
     double stdMissing;
     // The segment length in base pairs for ms replicates.
     int length;
+    // If each diploid individual only contains one lineage. ms-style input only.
+    bool hap;
     // The EGGS command the user ran.
     char* command;
 } EggsConfig_t;

@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
         }
 
         // For each replicate in the ms-style input.
-        while ((replicate = parse_ms(inputStream, eggsConfig -> length)) != NULL) {
+        while ((replicate = parse_ms(inputStream, eggsConfig -> length, eggsConfig -> hap)) != NULL) {
             Mask_t* mask = NULL;
             if (eggsConfig -> maskFile != NULL)
                 mask = create_missing_mask(dis, replicate -> numSamples, replicate -> numRecords);

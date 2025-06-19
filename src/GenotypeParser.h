@@ -107,8 +107,9 @@ void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream);
 // Accepts:
 //  InputStream_t* inputStream -> The ms-style file we are reading from.
 //  int length -> The length of the resulting segment in base pairs.
+//  bool hap -> If the lineages in the resulting VCF should be haploid.
 // Returns: Replicate_t*, the ms replicate. NULL, if no more ms replicates in stream. 
-Replicate_t* parse_ms(InputStream_t* inputStream, int length);
+Replicate_t* parse_ms(InputStream_t* inputStream, int length, bool hap);
 
 // Frees memory associated with a record.
 void destroy_record(Record_t* record);

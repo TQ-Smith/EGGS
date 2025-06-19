@@ -162,7 +162,7 @@ void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream) {
 
 }
 
-Replicate_t* parse_ms(InputStream_t* inputStream, int length) {
+Replicate_t* parse_ms(InputStream_t* inputStream, int length, bool hap) {
     if (inputStream == NULL)
         return NULL;
 
@@ -217,7 +217,7 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length) {
 
     // Create our replicate. Each sample is diploid.
     Replicate_t* replicate = (Replicate_t*) calloc(1, sizeof(Replicate_t));
-    replicate -> numSamples = numLineages / 2;
+    replicate -> numSamples = hap ? numLineages : numLineages / 2;
     replicate -> numRecords = segsites;
 
     // For each segsite.
@@ -232,9 +232,14 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length) {
         for (int j = 0; j < replicate -> numSamples; j++) {
             // MS lineages are phased.
             temp -> genotypes[j].isPhased = true;
-            // Same pair of lineages creates a diploid sample.
-            temp -> genotypes[j].left = kv_A(lineages, 2 * j)[i] - '0'; 
-            temp -> genotypes[j].right = kv_A(lineages, 2 * j + 1)[i] - '0'; 
+            if (hap) {
+                temp -> genotypes[j].left = kv_A(lineages, j)[i] - '0'; 
+                temp -> genotypes[j].right = MISSING;
+            } else {
+                // Same pair of lineages creates a diploid sample.
+                temp -> genotypes[j].left = kv_A(lineages, 2 * j)[i] - '0'; 
+                temp -> genotypes[j].right = kv_A(lineages, 2 * j + 1)[i] - '0'; 
+            }
         }
         // Add record to replicate list.
         if (replicate -> headRecord == NULL) {

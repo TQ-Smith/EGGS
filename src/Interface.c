@@ -15,7 +15,7 @@
 void print_help() {
     fprintf(stderr, "\n");
     fprintf(stderr, "EGGS v1.0\n");
-    fprintf(stderr, "------------------\n\n");
+    fprintf(stderr, "---------\n\n");
     fprintf(stderr, "Written by T. Quinn Smith\n");
     fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
     fprintf(stderr, "The Pennsylvania State University\n\n");
@@ -34,6 +34,7 @@ void print_help() {
     fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs.\n");
+    fprintf(stderr, "    -a,--hap                        Only used with ms-style input. Each diploid only has one lineage.\n");
     fprintf(stderr, "\n");
 }
 
@@ -48,6 +49,7 @@ static ko_longopt_t long_options[] = {
     {"beta",            ko_required_argument,   'b'},
     {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
+    {"hap",             ko_no_argument,         'a'},
     {0, 0, 0}
 };
 
@@ -125,6 +127,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> meanMissing = -1;
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = 1000000;
+    eggsConfig -> hap = false;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
@@ -139,6 +142,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
             case 'b': eggsConfig -> betaMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
+            case 'a': eggsConfig -> hap = true;
         }
 	}
 

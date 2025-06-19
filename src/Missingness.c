@@ -80,7 +80,7 @@ Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numR
 
     // If we are shrinking the dispersal
     if (numRecords <= dis -> numRecords) {
-        int chunkSize = dis -> numRecords / numRecords;
+        int chunkSize = (int) ceil(dis -> numRecords / (double) numRecords);
         int nextChunk = 0;
         // Randomly choose a proportion of missingess from the chunk of sites.
         for (int i = 0; i < numRecords - 1; i++) {
@@ -90,23 +90,17 @@ Mask_t* create_missing_mask(MissingDistribution_t* dis, int numSamples, int numR
         proportions[numRecords - 1] = dis -> proportions[nextChunk + gsl_rng_uniform_int(r, dis -> numRecords - nextChunk)];
     // If we are stretching the dispersal
     } else {
-        int chunkSize = (int) (numRecords / (double) dis -> numRecords + 1);
+        int chunkSize = (int) ceil(numRecords / (double) dis -> numRecords);
         int nextChunk = 0;
         // For each chunk, take two adjacent sites and randomly get a proportion between the two bounds.
         for (int i = 0; i < dis -> numRecords - 1; i++) {
             for (int j = 0; j < chunkSize; j++)
-                if (dis -> proportions[i] <= dis -> proportions[i + 1])
-                    proportions[nextChunk + j] = uniform(r, dis -> proportions[i], dis -> proportions[i + 1]);
-                else 
-                    proportions[nextChunk + j] = uniform(r, dis -> proportions[i + 1], dis -> proportions[i]);
+                 proportions[nextChunk + j] = uniform(r, fmin(dis -> proportions[i], dis -> proportions[i + 1]), fmax(dis -> proportions[i], dis -> proportions[i + 1]));
             nextChunk += chunkSize;
         }
         // We model the last chunk after the last two sites.
         for (int j = nextChunk; j < numRecords; j++)
-            if (dis -> proportions[dis -> numRecords - 2] <= dis -> proportions[dis -> numRecords - 1])
-                proportions[j] = uniform(r, dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1]);
-            else 
-                proportions[j] = uniform(r, dis -> proportions[dis -> numRecords - 1], dis -> proportions[dis -> numRecords - 2]);
+            proportions[j] = uniform(r, fmin(dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1]), fmax(dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1]));
     }
 
     // Randomly introduce missingness to the samples at each site.
