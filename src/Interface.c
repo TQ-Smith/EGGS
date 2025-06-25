@@ -102,7 +102,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hupso:m:r:l:b:";
+    const char *opt_str = "haupso:m:r:l:b:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
