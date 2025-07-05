@@ -166,14 +166,6 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length, bool hap) {
     if (inputStream == NULL)
         return NULL;
 
-    // List of the segregating site positions.
-    kvec_t(int) positions;
-    kv_init(positions);
-
-    // List of the lineages in the ms replicate.
-    kvec_t(char*) lineages;
-    kv_init(lineages);
-
     // Eat lines until segsites encountered.
     do {
         ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, 0);
@@ -182,6 +174,14 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length, bool hap) {
     // If EOF, no replicate can be parsed. Return NULL.
     if (ks_eof(inputStream -> fpIn))
         return NULL;
+
+    // List of the segregating site positions.
+    kvec_t(int) positions;
+    kv_init(positions);
+
+    // List of the lineages in the ms replicate.
+    kvec_t(char*) lineages;
+    kv_init(lineages);
 
     // Get number of segsites.
     int segsites = (int) strtol(inputStream -> buffer -> s + 10, (char**) NULL, 10); 

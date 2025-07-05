@@ -211,6 +211,13 @@ int main(int argc, char* argv[]) {
     // Read first line from stdin to determine if it is a VCF file or ms-style input.
     ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, 0);
 
+    // If there is not stdin to read from, then we exit.
+    if (ks_eof(inputStream -> fpIn)) {
+        destroy_input_stream(inputStream);
+        destroy_eggs_configuration(eggsConfig);
+        return -1;
+    }
+    
     // If VCF.
     if (strncmp(inputStream -> buffer -> s, "##fileformat=VCF", 16) == 0) {
         // If output basename was given, open file. Otherwise, we are printing to stdout.
