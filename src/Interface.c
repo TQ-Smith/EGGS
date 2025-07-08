@@ -32,6 +32,8 @@ void print_help() {
     fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta dsitribution for missingness.\n");
     fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from VCF and uses that\n");
     fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
+    fprintf(stderr, "    -d,--deamin     STR             Two comma-seperated proportions \"prop1,prop2\" where prop1 is the probability\n");
+    fprintf(stderr, "                                        the site is a transition and prop2 is the probability of deamination.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs.\n");
     fprintf(stderr, "    -a,--hap                        Only used with ms-style input. Each diploid only has one lineage.\n");
@@ -50,6 +52,7 @@ static ko_longopt_t long_options[] = {
     {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
     {"hap",             ko_no_argument,         'a'},
+    {"deamin",          ko_required_argument,   'b'},
     {0, 0, 0}
 };
 
@@ -97,12 +100,31 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         }
         free(meanstd);
     }
+    // If deamination parameters where given.
+    if (eggsConfig -> deamin != NULL) {
+        char* deamin = strdup(eggsConfig -> deamin);
+        char* next  = NULL;
+        eggsConfig -> probTransition = strtod(deamin, &next);
+        // Ensure both proportions were given seperated by a comma.
+        if (deamin == next || next[0] != ',') {
+            fprintf(stderr, "-d must be given two positive real numbers seperated by a comma. Exiting!\n");
+            free(deamin);
+            return -1;
+        }
+        eggsConfig -> probDeamination = strtod(next + 1, (char**) NULL);
+        if (eggsConfig -> probDeamination >= 1 || eggsConfig -> probDeamination <= 0 || eggsConfig -> probTransition >= 1 || eggsConfig -> probTransition <= 0) {
+            fprintf(stderr, "-d must be given two real numbers in (0, 1). Exiting!\n");
+            free(deamin);
+            return -1;
+        }
+        free(deamin);
+    }
     return 0;
 }
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "haupso:m:r:l:b:";
+    const char *opt_str = "haupso:m:r:l:b:d:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -128,6 +150,9 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = 1000000;
     eggsConfig -> hap = false;
+    eggsConfig -> deamin = NULL;
+    eggsConfig -> probDeamination = 0;
+    eggsConfig -> probTransition = 0;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
@@ -143,6 +168,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'b': eggsConfig -> betaMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'a': eggsConfig -> hap = true;
+            case 'd': eggsConfig -> deamin = strdup(options.arg); break;
         }
 	}
 
@@ -175,5 +201,7 @@ void destroy_eggs_configuration(EggsConfig_t* eggsConfig) {
         free(eggsConfig -> betaMissing);
     if (eggsConfig -> command != NULL)
         free(eggsConfig -> command);
+    if (eggsConfig -> deamin != NULL)
+        free(eggsConfig -> deamin);
     free(eggsConfig);
 }

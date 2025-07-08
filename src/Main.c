@@ -80,6 +80,11 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
     if (eggsConfig -> unpolarize && record -> numAlleles == 2 && rand() < 0.5)
         swapStates = true;
 
+    // Flag to set if biallelic site should be deanimated.
+    bool isTransition = false;
+    if (eggsConfig -> probTransition != 0 && record -> numAlleles == 2 && rand() < eggsConfig -> probTransition)
+        isTransition = true;
+
     for (int i = 0; i < record -> numSamples; i++) {
         // If the genotype is masked out, then skip rest of logic.
         if (mask != NULL && mask -> missing[record -> recordIndex][i] == MISSING) {
@@ -100,6 +105,12 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
                 record -> genotypes[i].left ^= 1;
             if (swapStates && record -> genotypes[i].right != MISSING)
                 record -> genotypes[i].right ^= 1;
+
+            // If the site should be demainated.
+            if (isTransition && record -> genotypes[i].left == 0 && rand() < eggsConfig -> probDeamination)
+                record -> genotypes[i].left = 1;
+            if (isTransition && record -> genotypes[i].right == 0 && rand() < eggsConfig -> probDeamination)
+                record -> genotypes[i].right = 1;
 
             // If pseudohap is set, then randomly pick one allele.
             if (eggsConfig -> pseudohap) {

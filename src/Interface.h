@@ -37,6 +37,10 @@ typedef struct {
     int length;
     // If each diploid individual only contains one lineage. ms-style input only.
     bool hap;
+    // Used for deamination.
+    char* deamin;
+    double probTransition;
+    double probDeamination;
     // The EGGS command the user ran.
     char* command;
 } EggsConfig_t;
