@@ -37,6 +37,8 @@ void print_help() {
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs.\n");
     fprintf(stderr, "    -a,--hap                        Only used with ms-style input. Each diploid only has one lineage.\n");
+    fprintf(stderr, "    -x,--ms                        Output to ms format (works when no missing entries)\n");
+    //fprintf(stderr, "    -n,--no-gzip                   Disable gzip compression for output (write plain VCF/ms)\n");
     fprintf(stderr, "\n");
 }
 
@@ -53,6 +55,8 @@ static ko_longopt_t long_options[] = {
     {"length",          ko_required_argument,   'l'},
     {"hap",             ko_no_argument,         'a'},
     {"deamin",          ko_required_argument,   'b'},
+    {"ms",          ko_no_argument,   'x'},
+    //{"no-gzip",          ko_no_argument,   'n'},
     {0, 0, 0}
 };
 
@@ -154,6 +158,9 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> probDeamination = 0;
     eggsConfig -> probTransition = 0;
     eggsConfig -> command = NULL;
+    eggsConfig -> ms = false;
+    //eggsConfig -> noGzip = false;
+    
 
     // Get parameters from user.
     options = KETOPT_INIT;
@@ -169,6 +176,8 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'a': eggsConfig -> hap = true;
             case 'd': eggsConfig -> deamin = strdup(options.arg); break;
+            case 'x': eggsConfig -> ms = true; break;
+            //case 'n': eggsConfig -> noGzip = true; break;
         }
 	}
 

@@ -17,7 +17,7 @@ bin/eggs: lib src
 .PHONY: src
 src: src/Main.o
 
-src/Main.o: src/Interace.o src/GenotypeParser.o src/Missingness.o
+src/Main.o: src/Interace.o src/GenotypeParser.o src/Missingness.o 
 	$(CC) $(CFLAGS) src/Main.c -o src/Main.o
 
 src/Interace.o:

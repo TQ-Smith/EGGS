@@ -11,6 +11,7 @@
 #include "Missingness.h"
 #include <math.h>
 #include <time.h>
+#include "compact_bitset.h"
 
 // Swap integer values.
 #define SWAP(a, b, temp) { a = temp; a = b; b = temp; }
@@ -38,6 +39,14 @@ void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile f
             gzprintf(fpOut, "\t%s", replicate -> sampleNames[i]);
     gzprintf(fpOut, "\n");
 }
+
+
+// Print a simple ms header from a replicate.
+void print_ms_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
+    gzprintf(fpOut, "eggsv1.0 \n\n");
+}
+
+
 
 // Prints a record.
 // Accepts:
@@ -139,6 +148,122 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
     }
     gzprintf(fpOut, "\n");
 }
+
+
+
+// Print the list of records in a replicate, assuming output is in ms format.
+// Accepts:
+//  Replicate_t* replicate -> The records to print.
+//  Mask_t* mask -> The mask to apply.
+//  EggsConfig_t* eggsConfig -> The user parameters.
+//  gzFile fpOut -> The output stream.
+// Returns: void.
+void print_replicate_ms(Replicate_t* replicate, Mask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
+
+    int n = replicate -> numSamples * 2;         // number of bitsets
+    int bitlen = replicate -> numRecords;  // each bitset has bitlen bits
+    
+    gzprintf(fpOut, "//\n");
+    gzprintf(fpOut, "segsites: %d\n", replicate -> numRecords);
+    gzprintf(fpOut, "positions: ");
+    
+    Record_t* record = replicate -> headRecord;
+    for (int i = 0; i < replicate -> numRecords; i++) {
+        if(record -> position > eggsConfig->length){
+            fprintf(stderr, "ERROR: positions must be less than or equal to the segment length provided with -l.\n");
+            fprintf(stderr, "Found position %d, but segment length is %d.\n", record -> position, eggsConfig -> length);
+            exit(EXIT_FAILURE);
+        }
+        gzprintf(fpOut, "%.8f ", record -> position*1.0 / eggsConfig -> length);
+        record = record -> nextRecord; //next record
+    }
+
+    gzprintf(fpOut, "\n");
+
+    CompactBitset* bitsets[n];
+    for (int i = 0; i < n; ++i) {
+        bitsets[i] = cb_create(bitlen);
+    }
+    
+    record = replicate -> headRecord;
+    for (int p = 0; p < replicate -> numRecords; p++) {
+        // Used to swap allele to unphase.
+        int tempInt = 0;
+        // Flag is set if biallelic site should be unpolarized with 50/50 chance.
+        bool swapStates = false;
+        if (eggsConfig -> unpolarize && record -> numAlleles == 2 && rand() < 0.5){
+            swapStates = true;
+        }
+
+        // Flag to set if biallelic site should be deanimated.
+        bool isTransition = false;
+        if (eggsConfig -> probTransition != 0 && record -> numAlleles == 2 && rand() < eggsConfig -> probTransition)
+            isTransition = true;
+
+        // do the processing in file
+        for (int i = 0; i < record -> numSamples; i++) {
+            // If the genotype is masked out, then skip rest of logic.
+            if (mask != NULL && mask -> missing[record -> recordIndex][i] == MISSING) {
+                fprintf(stderr, "ERROR: missing entries not allowed in ms output\n");
+                exit(EXIT_FAILURE);  
+            } else {
+                // If genotypes should be unphased with a 50/50 chance.
+                if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
+                    record -> genotypes[i].isPhased = false;
+                    if (rand() < 0.5)
+                        SWAP(record -> genotypes[i].left, record -> genotypes[i].right, tempInt);
+                }
+
+                // If biallelic and locus should be unpolarized.
+                if (swapStates && record -> genotypes[i].left != MISSING)
+                    record -> genotypes[i].left ^= 1;
+                if (swapStates && record -> genotypes[i].right != MISSING)
+                    record -> genotypes[i].right ^= 1;
+
+                // If the site should be demainated.
+                if (isTransition && record -> genotypes[i].left == 0 && rand() < eggsConfig -> probDeamination)
+                    record -> genotypes[i].left = 1;
+                if (isTransition && record -> genotypes[i].right == 0 && rand() < eggsConfig -> probDeamination)
+                    record -> genotypes[i].right = 1;
+
+                // If pseudohap is set, then randomly pick one allele.
+                if (eggsConfig -> pseudohap) {
+                    record -> genotypes[i].isPhased = false;
+                    if (rand() < 0.5)
+                        record -> genotypes[i].right = record -> genotypes[i].left;
+                    else
+                        record -> genotypes[i].left = record -> genotypes[i].right;
+                }
+            }
+
+            // Print out sample's genotype.
+            if (record -> genotypes[i].left == MISSING || record -> genotypes[i].right == MISSING) {
+                fprintf(stderr, "ERROR: missing entries not allowed in ms output\n");
+                exit(EXIT_FAILURE);  
+            }
+
+            if(record -> genotypes[i].left == 1 )
+                cb_set_bit(bitsets[2*i], p);
+
+            if(record -> genotypes[i].right == 1 )
+                cb_set_bit(bitsets[2*i+1], p);
+        }
+        record = record -> nextRecord; //next record
+    }
+        
+    for (int i = 0; i < n; ++i) {
+        for (int k = 0; k < bitsets[i]->nbits; ++k) {
+            gzprintf(fpOut, "%d", cb_get_bit(bitsets[i], k));
+        }
+        gzprintf(fpOut, "\n");
+    }
+
+    // Cleanup
+    for (int i = 0; i < n; ++i) {
+        cb_destroy(bitsets[i]);
+    }
+}
+
 
 // Print the list of records in a replicate.
 // Accepts:
@@ -270,7 +395,11 @@ int main(int argc, char* argv[]) {
 
         } 
 
-        print_vcf_header(replicate, eggsConfig, fpOut);
+        if(eggsConfig -> ms) {
+            print_ms_header(replicate, eggsConfig, fpOut);
+        }else{
+            print_vcf_header(replicate, eggsConfig, fpOut);
+        }
 
         // If no mask was created, then we can just sequentually print records out.
         if (mask == NULL) {
@@ -302,6 +431,8 @@ int main(int argc, char* argv[]) {
             destroy_replicate(maskReplicate);
         }
 
+
+
         // For each replicate in the ms-style input.
         while ((replicate = parse_ms(inputStream, eggsConfig -> length, eggsConfig -> hap)) != NULL) {
             Mask_t* mask = NULL;
@@ -321,20 +452,39 @@ int main(int argc, char* argv[]) {
             // If output basename was given, then print replicates to basename.
             } else if (eggsConfig -> outFile != NULL) {
                 kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
-                ksprintf(outName, "%s_rep%d.vcf.gz", eggsConfig -> outFile, numReps);
+                if(eggsConfig -> ms) {
+                    // If ms-style output, then we print to basename with replicate number.
+                    ksprintf(outName, "%s_rep%d.ms.gz", eggsConfig -> outFile, numReps);
+                } else{
+                    // If VCF output, then we print to basename with replicate number.
+                    ksprintf(outName, "%s_rep%d.vcf.gz", eggsConfig -> outFile, numReps);
+                }
                 fpOut = gzopen(outName -> s, "w");
                 free(outName -> s); free(outName);
-            // If no basename was given use "rep".
             } else {
+                // If no basename was given use "rep".
                 kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
-                ksprintf(outName, "rep%d.vcf.gz", numReps);
+
+                if(eggsConfig -> ms) {
+                    // If ms-style output, then we print to "rep" with replicate number.
+                    ksprintf(outName, "rep%d.ms.gz", numReps);
+                } else{
+                    // If VCF output, then we print to "rep" with replicate number.
+                    ksprintf(outName, "rep%d.vcf.gz", numReps);
+                }
                 fpOut = gzopen(outName -> s, "w");
                 free(outName -> s); free(outName);
             }
 
             // Print out replicate.
-            print_vcf_header(replicate, eggsConfig, fpOut);
-            print_replicate(replicate, mask, eggsConfig, fpOut);
+            if(eggsConfig -> ms) {
+                print_ms_header(replicate, eggsConfig, fpOut);
+                print_replicate_ms(replicate, mask, eggsConfig, fpOut);
+            }else{
+                print_vcf_header(replicate, eggsConfig, fpOut);
+                print_replicate(replicate, mask, eggsConfig, fpOut);
+            }
+            
 
             gzclose(fpOut);
             destroy_replicate(replicate);
