@@ -43,6 +43,9 @@ typedef struct {
     double probDeamination;
     // The EGGS command the user ran.
     char* command;
+    bool ms; // If the output should be in ms format.
+    bool noGzip; // if true, then output is not gzipped.
+
 } EggsConfig_t;
 
 // Accepts the command line arguments and sets configuration parameters.
