@@ -41,6 +41,8 @@ typedef struct {
     char* deamin;
     double probTransition;
     double probDeamination;
+    // Use ms-style output.
+    bool msOutput;
     // The EGGS command the user ran.
     char* command;
 } EggsConfig_t;

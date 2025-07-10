@@ -57,16 +57,16 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
     replicate -> numSamples = numSamples - 8;
 
     // Copy the sample names from the header line.
-    int numTabs = 0, prevIndex = 0;
     replicate -> sampleNames = calloc(replicate -> numSamples, sizeof(char*));
-    for (int i = 0; i <= inputStream -> buffer -> l; i++) {
-        if (i == inputStream -> buffer -> l || inputStream -> buffer -> s[i] == '\t') {
-            if (numTabs > 8) {
-                replicate -> sampleNames[numTabs - 9] = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
-            }
-            prevIndex = i;
-            numTabs++;
-        }
+    // Read in the sample names.
+    char* header = strdup(inputStream -> buffer -> s);
+    char* tok = NULL;
+    tok = strtok(header, "\t");
+    for (int i = 0; i < 9; i++)
+        tok = strtok(NULL, "\t");
+    for (int i = 0; i < replicate -> numSamples; i++) {
+        replicate -> sampleNames[i] = strdup(tok);
+        tok = strtok(NULL, "\t");
     }
 
     return replicate;
@@ -74,7 +74,7 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
 
 bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream) {
 
-    int numTabs = 0, prevIndex = 0, dret = 0, numAlleles = 2;
+    int dret = 0, numAlleles = 2;
 
     // Get the next line.
     ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, &dret);
@@ -84,45 +84,38 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream) {
         return false;
 
     // We parse the record. This is messier than splitting on tab.
-    for (int i = 0; i <= inputStream -> buffer -> l; i++) {
-        if (i == inputStream -> buffer -> l || inputStream -> buffer -> s[i] == '\t') {
-            // Copy chromosome name.
-            if (numTabs == 0) {
-                if (record -> chrom != NULL)
-                    free(record -> chrom);
-                record -> chrom = strndup(inputStream -> buffer -> s, i);
-            // Get locus position.
-            } else if (numTabs == 1) {
-                record -> position = (int) strtol(inputStream -> buffer -> s + prevIndex + 1, (char**) NULL, 10);
-            // Copy reference allele.
-            } else if (numTabs == 3) {
-                if (record -> ref != NULL)
-                    free(record -> ref);
-                record -> ref = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
-            // Copy alt alleles and count number of total alleles.
-            } else if (numTabs == 4) {
-                for (int j = prevIndex + 1; inputStream -> buffer -> s[j] != '\t'; j++)
-                    if (inputStream -> buffer -> s[j] == ',')
-                        numAlleles++;
-                if (record -> alts != NULL)
-                    free(record -> alts);
-                record -> alts = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
-            // Parse each sample's genotype.
-            } else if (numTabs > 8) {
-                record -> genotypes[numTabs - 9].left = MISSING;
-                record -> genotypes[numTabs - 9].right = MISSING;
-                record -> genotypes[numTabs - 9].isPhased = false;
-                char* start = inputStream -> buffer -> s + prevIndex + 1;
-                char* next = start + 1;
-                if (start[0] != '.')
-                    record -> genotypes[numTabs - 9].left = (int) strtol(start, &next, 10);
-                if (next[0] == '|')
-                    record -> genotypes[numTabs - 9].isPhased = true;
-                if ((next[0] == '|' || next[0] == '/') && next[1] != '.')
-                    record -> genotypes[numTabs - 9].right = (int) strtol(next + 1, (char**) NULL, 10);
-            }
-            prevIndex = i;
-            numTabs++;
+    char* line = strdup(inputStream -> buffer -> s);
+    char* tok = strtok(line, "\t");
+    if (record -> chrom != NULL)
+        free(record -> chrom);
+    record -> chrom = strdup(tok);
+    for (int i = 1; i < 9 + record -> numSamples; i++) {
+        tok = strtok(NULL, "\t");
+        if (i == 1)
+            record -> position = (int) strtol(tok, (char**) NULL, 10);
+        else if (i == 3) {
+            if (record -> ref != NULL)
+                free(record -> ref);
+            record -> ref = strdup(tok);
+        } else if (i == 4) {
+            for (int j = 0; j < strlen(tok); j++)
+                if (tok[j] == ',')
+                    numAlleles++;
+            if (record -> alts != NULL)
+                free(record -> alts);
+            record -> alts = strdup(tok);
+        } else if (i > 8) {
+            record -> genotypes[i - 9].left = MISSING;
+            record -> genotypes[i - 9].right = MISSING;
+            record -> genotypes[i - 9].isPhased = false;
+            char* start = strdup(tok);
+            char* next = start;
+            if (start[0] != '.')
+                record -> genotypes[i - 9].left = (int) strtol(start, &next, 10);
+            if (next[0] == '|')
+                record -> genotypes[i - 9].isPhased = true;
+            if ((next[0] == '|' || next[0] == '/') && next[1] != '.')
+                record -> genotypes[i - 9].right = (int) strtol(next + 1, (char**) NULL, 10);
         }
     }
     record -> numAlleles = numAlleles;

@@ -34,9 +34,13 @@ void print_help() {
     fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
     fprintf(stderr, "    -d,--deamin     STR             Two comma-seperated proportions \"prop1,prop2\" where prop1 is the probability\n");
     fprintf(stderr, "                                        the site is a transition and prop2 is the probability of deamination.\n");
-    fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segments in base-pairs.\n");
-    fprintf(stderr, "                                        Default 1,000,000 base-pairs.\n");
-    fprintf(stderr, "    -a,--hap                        Only used with ms-style input. Each diploid only has one lineage.\n");
+    fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segment in base-pairs.\n");
+    fprintf(stderr, "                                        Default 1,000,000 base-pairs if not provided or invalid.\n");
+    fprintf(stderr, "    -a,--hap                        Only used with ms-style input/output. Treat each diploid as only one lineage.\n");
+    fprintf(stderr, "                                        For ms-style output, non-missing allele is used.\n");
+    fprintf(stderr, "    -x,--ms                         Output ms-style replicates. Cannot use missing data options.\n");
+    fprintf(stderr, "                                        If a genotype is missing, then the ancestral is used. If multiallelic VCF site,\n");
+    fprintf(stderr, "                                        then any alternative alleles are treated as derived.\n");
     fprintf(stderr, "\n");
 }
 
@@ -53,21 +57,17 @@ static ko_longopt_t long_options[] = {
     {"length",          ko_required_argument,   'l'},
     {"hap",             ko_no_argument,         'a'},
     {"deamin",          ko_required_argument,   'b'},
+    {"ms",              ko_no_argument,         'x'},
     {0, 0, 0}
 };
 
 // Accepts parsed parameters from user and ensures they are valid.
 // Returns: 0, if valid. -1, if invalid.
 int check_configuration(EggsConfig_t* eggsConfig) {
-    // If length was set by the user, it must be an integer >= 1000.
-    if (eggsConfig -> length != -1 && eggsConfig -> length < 1000) {
-        fprintf(stderr, "-l must be given an integer >= 1000. Exiting!\n");
-        return -1;
-    }
     // Cannot use mask, beta, or random genotypes together.
-    int numSet = (int) (eggsConfig -> randomMissing != NULL) + (int) (eggsConfig -> maskFile != NULL) + (int) (eggsConfig -> betaMissing != NULL);
+    int numSet = (int) (eggsConfig -> randomMissing != NULL) + (int) (eggsConfig -> maskFile != NULL) + (int) (eggsConfig -> betaMissing != NULL) + (int) (eggsConfig -> msOutput);
     if (numSet > 1) {
-        fprintf(stderr, "Cannot use -m, -b, and -r options together. Exiting!\n");
+        fprintf(stderr, "Cannot use -m, -b, -r, or -x options together. Exiting!\n");
         return -1;
     }
     // If mask file given, make sure it exists.
@@ -124,7 +124,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "haupso:m:r:l:b:d:";
+    const char *opt_str = "hxaupso:m:r:l:b:d:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -148,11 +148,12 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> randomMissing = NULL;
     eggsConfig -> meanMissing = -1;
     eggsConfig -> stdMissing = -1;
-    eggsConfig -> length = 1000000;
+    eggsConfig -> length = -1;
     eggsConfig -> hap = false;
     eggsConfig -> deamin = NULL;
     eggsConfig -> probDeamination = 0;
     eggsConfig -> probTransition = 0;
+    eggsConfig -> msOutput = false;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
@@ -169,6 +170,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'a': eggsConfig -> hap = true;
             case 'd': eggsConfig -> deamin = strdup(options.arg); break;
+            case 'x': eggsConfig -> msOutput = true; break;
         }
 	}
 

@@ -1,7 +1,7 @@
 
 // File: Main.c
 // Date: 13 May 2025
-// Author: T. Quinn Smith
+// Authors: T. Quinn Smith and Dr. Amatur Rahman
 // Principal Investigator: Dr. Zachary A. Szpiech
 // Purpose: Main logic of EGGS.
 
@@ -140,6 +140,91 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
     gzprintf(fpOut, "\n");
 }
 
+// Print the replicate to ms format.
+void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
+    gzprintf(fpOut, "\n//\n");
+    gzprintf(fpOut, "segsites: %d\n", replicate -> numRecords);
+    gzprintf(fpOut, "positions: ");
+
+    // Get closest multiple of a 1000 if not default.
+    int sizeOfSegment;
+    if (eggsConfig -> length > 0) 
+        sizeOfSegment = eggsConfig -> length;
+    else
+        sizeOfSegment = ((int) (replicate -> tailRecord -> position / 1000) + 1) * 1000;
+    gzprintf(fpOut, "%.8lf", replicate -> headRecord -> position / (double) sizeOfSegment);
+    for (Record_t* temp = replicate -> headRecord -> nextRecord; temp != NULL; temp = temp -> nextRecord)
+        gzprintf(fpOut, " %.8lf", temp -> position / (double) sizeOfSegment);
+    gzprintf(fpOut, "\n");
+
+    // We process the sites first.
+    for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord) {
+        // Used to swap allele to unphase.
+        int tempInt = 0;
+        // Flag is set if biallelic site should be unpolarized with 50/50 chance.
+        bool swapStates = false;
+        if (eggsConfig -> unpolarize && rand() < 0.5)
+            swapStates = true;
+
+        // Flag to set if biallelic site should be deanimated.
+        bool isTransition = false;
+        if (eggsConfig -> probTransition != 0 && rand() < eggsConfig -> probTransition)
+            isTransition = true;
+
+        for (int i = 0; i < replicate -> numSamples; i++) {
+
+            // Put non missing in left. If missing, use ancestral. If multiallelic use alternative.
+            if (!temp -> genotypes[i].isPhased) {
+                if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right != MISSING)
+                    SWAP(temp -> genotypes[i].left, temp -> genotypes[i].right, tempInt);
+                if (temp -> genotypes[i].right == MISSING)
+                    temp -> genotypes[i].right = 0;
+            }
+            if (temp -> genotypes[i].left > 0)
+                temp -> genotypes[i].left = 1;
+            if (temp -> genotypes[i].right > 0)
+                temp -> genotypes[i].right = 1;
+
+            // If genotypes should be unphased with a 50/50 chance.
+            if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
+                temp -> genotypes[i].isPhased = false;
+                if (rand() < 0.5)
+                    SWAP(temp -> genotypes[i].left, temp -> genotypes[i].right, tempInt);
+            }
+
+            if (swapStates && temp -> genotypes[i].left != MISSING) 
+                temp -> genotypes[i].left ^= 1;
+            if (swapStates && temp -> genotypes[i].right != MISSING)
+                temp -> genotypes[i].right ^= 1;
+
+            // If the site should be demainated.
+            if (isTransition && temp -> genotypes[i].left == 0 && rand() < eggsConfig -> probDeamination)
+                temp -> genotypes[i].left = 1;
+            if (isTransition && temp -> genotypes[i].right == 0 && rand() < eggsConfig -> probDeamination)
+                temp -> genotypes[i].right = 1;
+
+            // If pseudohap is set, then randomly pick one allele.
+            if (eggsConfig -> pseudohap) {
+                temp -> genotypes[i].isPhased = false;
+                if (rand() < 0.5)
+                    temp -> genotypes[i].right = temp -> genotypes[i].left;
+                else
+                    temp -> genotypes[i].left = temp -> genotypes[i].right;
+            }
+        }
+    }
+
+    // Then we print the lineages.
+    for (int i = 0; i < replicate -> numSamples; i++) {
+        for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord)
+            gzprintf(fpOut, "%d", temp -> genotypes[i].left);
+        if (!eggsConfig -> hap)
+            for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord)
+                gzprintf(fpOut, "%d", temp -> genotypes[i].right);
+        gzprintf(fpOut, "\n");
+    }
+}
+
 // Print the list of records in a replicate.
 // Accepts:
 //  Replicate_t* replicate -> The records to print.
@@ -148,14 +233,19 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
 //  gzFile fpOut -> The output stream.
 // Returns: void.
 void print_replicate(Replicate_t* replicate, Mask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
-    Record_t* temp = replicate -> headRecord;
-    for (int i = 0; i < replicate -> numRecords; i++) {
-        if (mask == NULL)
-            print_record(temp, NULL, eggsConfig, fpOut);
-        else 
-            // Pass the record's corresponding mask.
-            print_record(temp, mask, eggsConfig, fpOut);
-        temp = temp -> nextRecord;
+    if (!eggsConfig -> msOutput) {
+        print_vcf_header(replicate, eggsConfig, fpOut);
+        Record_t* temp = replicate -> headRecord;
+        for (int i = 0; i < replicate -> numRecords; i++) {
+            if (mask == NULL)
+                print_record(temp, NULL, eggsConfig, fpOut);
+            else 
+                // Pass the record's corresponding mask.
+                print_record(temp, mask, eggsConfig, fpOut);
+            temp = temp -> nextRecord;
+        }
+    } else {
+        print_ms_replicate(replicate, eggsConfig, fpOut);
     }
 }
 
@@ -235,7 +325,10 @@ int main(int argc, char* argv[]) {
         gzFile fpOut;
         if (eggsConfig -> outFile != NULL) {
             kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
-            ksprintf(outName, "%s.vcf.gz", eggsConfig -> outFile);
+            if (eggsConfig -> msOutput)
+                ksprintf(outName, "%s.ms.gz", eggsConfig -> outFile);
+            else
+                ksprintf(outName, "%s.vcf.gz", eggsConfig -> outFile);
             fpOut = gzopen(outName -> s, "w");
             free(outName -> s); free(outName);
         } else {
@@ -244,7 +337,6 @@ int main(int argc, char* argv[]) {
 
         Mask_t* mask = NULL;
         Replicate_t* replicate = init_vcf_replicate(inputStream);
-        parse_vcf(replicate, inputStream);
         
         if (eggsConfig -> maskFile != NULL || eggsConfig -> randomMissing != NULL) {
 
@@ -270,10 +362,8 @@ int main(int argc, char* argv[]) {
 
         } 
 
-        print_vcf_header(replicate, eggsConfig, fpOut);
-
-        // If no mask was created, then we can just sequentually print records out.
-        if (mask == NULL) {
+        // If no ms output and mask was created, then we can just sequentually print records out.
+        if (!eggsConfig -> msOutput && mask == NULL) {
             Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
             record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
             record -> numSamples = replicate -> numSamples;
@@ -281,6 +371,7 @@ int main(int argc, char* argv[]) {
                 print_record(record, NULL, eggsConfig, fpOut);
             destroy_record(record);
         } else {
+            parse_vcf(replicate, inputStream);
             print_replicate(replicate, mask, eggsConfig, fpOut);
         }
         
@@ -303,7 +394,12 @@ int main(int argc, char* argv[]) {
         }
 
         // For each replicate in the ms-style input.
-        while ((replicate = parse_ms(inputStream, eggsConfig -> length, eggsConfig -> hap)) != NULL) {
+        int length;
+        if (eggsConfig -> length <= 0 )
+            length = 1000000;
+        else 
+            length = eggsConfig -> length;
+        while ((replicate = parse_ms(inputStream, length, eggsConfig -> hap)) != NULL) {
             Mask_t* mask = NULL;
             if (eggsConfig -> maskFile != NULL)
                 mask = create_missing_mask(dis, replicate -> numSamples, replicate -> numRecords);
@@ -321,19 +417,28 @@ int main(int argc, char* argv[]) {
             // If output basename was given, then print replicates to basename.
             } else if (eggsConfig -> outFile != NULL) {
                 kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
-                ksprintf(outName, "%s_rep%d.vcf.gz", eggsConfig -> outFile, numReps);
+                if (eggsConfig -> msOutput)
+                    ksprintf(outName, "%s_rep%d.ms.gz", eggsConfig -> outFile, numReps);
+                else
+                    ksprintf(outName, "%s_rep%d.vcf.gz", eggsConfig -> outFile, numReps);
                 fpOut = gzopen(outName -> s, "w");
                 free(outName -> s); free(outName);
             // If no basename was given use "rep".
             } else {
                 kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
-                ksprintf(outName, "rep%d.vcf.gz", numReps);
+                if (eggsConfig -> msOutput)
+                    ksprintf(outName, "%s_rep%d.ms.gz", eggsConfig -> outFile, numReps);
+                else
+                    ksprintf(outName, "rep%d.vcf.gz", numReps);
                 fpOut = gzopen(outName -> s, "w");
                 free(outName -> s); free(outName);
             }
 
             // Print out replicate.
-            print_vcf_header(replicate, eggsConfig, fpOut);
+            if (eggsConfig -> msOutput)
+                gzprintf(fpOut, "%s\n", eggsConfig -> command);
+            else
+                print_vcf_header(replicate, eggsConfig, fpOut);
             print_replicate(replicate, mask, eggsConfig, fpOut);
 
             gzclose(fpOut);
