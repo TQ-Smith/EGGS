@@ -234,7 +234,6 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
 // Returns: void.
 void print_replicate(Replicate_t* replicate, Mask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
     if (!eggsConfig -> msOutput) {
-        print_vcf_header(replicate, eggsConfig, fpOut);
         Record_t* temp = replicate -> headRecord;
         for (int i = 0; i < replicate -> numRecords; i++) {
             if (mask == NULL)
