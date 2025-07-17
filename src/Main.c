@@ -258,9 +258,8 @@ void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
 
     // Read the VCF file.
     Replicate_t* replicate = init_vcf_replicate(inputStream);
-    parse_vcf(replicate, inputStream);
 
-    MissingDistribution_t* dis = init_missing_distribution(replicate);
+    MissingDistribution_t* dis = init_missing_distribution(replicate, inputStream);
     
     // Calculate and set mean.
     double mean = 0;
@@ -286,7 +285,7 @@ int main(int argc, char* argv[]) {
     EggsConfig_t* eggsConfig = init_eggs_configuration(argc, argv);
     if (eggsConfig == NULL)
         return -1;
-
+    
     // If a VCF file was given for random missingness, calculate mean and standard deviation per site.
     if (eggsConfig -> betaMissing != NULL && eggsConfig -> meanMissing == -1 && eggsConfig -> stdMissing == -1) {
         InputStream_t* inputStream = init_input_stream(eggsConfig -> betaMissing);
@@ -310,7 +309,7 @@ int main(int argc, char* argv[]) {
 
     // Read first line from stdin to determine if it is a VCF file or ms-style input.
     ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, 0);
-
+    
     // If there is not stdin to read from, then we exit.
     if (ks_eof(inputStream -> fpIn)) {
         destroy_input_stream(inputStream);
@@ -342,10 +341,9 @@ int main(int argc, char* argv[]) {
             // Read in mask file.
             InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile != NULL ? eggsConfig -> maskFile : eggsConfig -> randomMissing);
             Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
-            parse_vcf(maskReplicate, maskInput);
 
             // Calculate proportion of missing samples at each site.
-            MissingDistribution_t* dis = init_missing_distribution(maskReplicate);
+            MissingDistribution_t* dis = init_missing_distribution(maskReplicate, maskInput);
             if (eggsConfig -> maskFile != NULL)
                 mask = create_missing_mask(dis, replicate -> numSamples, replicate -> numRecords);
             else 
@@ -360,7 +358,7 @@ int main(int argc, char* argv[]) {
             mask = create_random_mask(NULL, replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
 
         } 
-
+        
         // If no ms output and mask was created, then we can just sequentually print records out.
         if (!eggsConfig -> msOutput && mask == NULL) {
             Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
@@ -386,8 +384,7 @@ int main(int argc, char* argv[]) {
         if (eggsConfig -> maskFile != NULL || eggsConfig -> randomMissing != NULL) {
             InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile != NULL ? eggsConfig -> maskFile : eggsConfig -> randomMissing);
             Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
-            parse_vcf(maskReplicate, maskInput);
-            dis = init_missing_distribution(maskReplicate);
+            dis = init_missing_distribution(maskReplicate, maskInput);
             destroy_input_stream(maskInput);
             destroy_replicate(maskReplicate);
         }

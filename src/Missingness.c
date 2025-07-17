@@ -36,26 +36,58 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
     }
 }
 
-MissingDistribution_t* init_missing_distribution(Replicate_t* replicate) {
+MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputStream_t* inputStream) {
     if (replicate == NULL)
         return NULL;
-    if (replicate -> numRecords == 0 || replicate -> numSamples == 0)
+    if (inputStream == NULL)
+        return NULL;
+    if (replicate -> numSamples == 0)
         return NULL;
 
     MissingDistribution_t* dis = calloc(1, sizeof(MissingDistribution_t));
+
+    typedef struct Proportions{
+        double prop;
+        struct Proportions* next;
+    } Proportions_t;
+
+    Proportions_t* head = NULL;
+    Proportions_t* tail = NULL;
+    Proportions_t* temp = NULL;
     
-    dis -> proportions = (double*) calloc(replicate -> numRecords, sizeof(double));
-    int curRecord = 0;
-    // Calculate the proportion of missing sampels at each record.
-    for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord) {
+    Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
+    record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
+    record -> numSamples = replicate -> numSamples;
+    
+    int numRecords = 0;
+    while (get_next_vcf_record(record, inputStream)) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++)
-            if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right == MISSING)
+            if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)
                 numMissing++;
-        dis -> proportions[curRecord] = numMissing /  (double) replicate -> numSamples;
-        curRecord++;
+        temp = calloc(1, sizeof(Proportions_t*));
+        if (numRecord == 0) {
+            temp -> prop = numMissing / (double) replicate -> numSamples;
+            head = temp;
+            tail = temp;
+        } else {
+            tail -> next = temp;
+            tail = temp;
+        }
+        numRecords++;
     }
-    dis -> numRecords = curRecord;
+
+    dis -> proportions = (double*) calloc(numRecords, sizeof(double));
+    dis -> numRecords = numRecords;
+    temp = head;
+    for (int i = 0; i < numRecords; i++) {
+        dis -> proportions[i] = temp -> prop;
+        temp = head;
+        head = head -> next;
+        free(temp);
+    }
+
+    destroy_record(record);
     
     return dis;
 }

@@ -40,9 +40,10 @@ Mask_t* init_mask(int numSamples, int numRecords);
 
 // Calculate the proportion of missing samples at each site.
 // Accepts:
-//  Recplicate_t* replicate -> A replicate read into memory.
+//  Recplicate_t* replicate -> A replicate. Only header is read.
+//  InputStream_t* inputStream -> The input stream to the VCF.
 // Returns: MissingDistribution_t*, the proportion of samples missing at each site.
-MissingDistribution_t* init_missing_distribution(Replicate_t* replicate);
+MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputStream_t* inputStream);
 
 // Create a mask by replicating the structure of missingness.
 // Accepts:
