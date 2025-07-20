@@ -42,11 +42,11 @@ void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile f
 // Prints a record.
 // Accepts:
 //  Record_t* record -> The record we are printing out.
-//  Mask_t* mask -> If index contains MISSING, then the sample's genotype is masked out.
+//  int* mask -> If index contains MISSING, then the sample's genotype is masked out.
 //  EggsConfig_t* eggsConfig -> Defines the logic of the record manipulation.
 //  gzFile fpOut -> The output stream.
 // Returns: void.
-void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
+void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
     // If ms-replicate, then we just use chrom 1.
     if (record -> chrom == NULL) 
         gzprintf(fpOut, "chr1");
@@ -86,8 +86,9 @@ void print_record(Record_t* record, Mask_t* mask, EggsConfig_t* eggsConfig, gzFi
         isTransition = true;
 
     for (int i = 0; i < record -> numSamples; i++) {
+
         // If the genotype is masked out, then skip rest of logic.
-        if (mask != NULL && mask -> missing[record -> recordIndex][i] == MISSING) {
+        if (mask != NULL && mask[i] == MISSING) {
             record -> genotypes[i].isPhased = false;
             record -> genotypes[i].left = MISSING;
             record -> genotypes[i].right = MISSING;
@@ -228,19 +229,24 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
 // Print the list of records in a replicate.
 // Accepts:
 //  Replicate_t* replicate -> The records to print.
-//  Mask_t* mask -> The mask to apply.
+//  MissingDistribution_t* mask -> Used to create the mask.
 //  EggsConfig_t* eggsConfig -> The user parameters.
 //  gzFile fpOut -> The output stream.
 // Returns: void.
-void print_replicate(Replicate_t* replicate, Mask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
+void print_replicate(Replicate_t* replicate, MissingDistribution_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
     if (!eggsConfig -> msOutput) {
+        int* site = NULL;
+        if (mask != NULL)
+            site = calloc(replicate -> numSamples, sizeof(int));
         Record_t* temp = replicate -> headRecord;
         for (int i = 0; i < replicate -> numRecords; i++) {
-            if (mask == NULL)
-                print_record(temp, NULL, eggsConfig, fpOut);
+            // If we are choosing randomly from the realized distribution.
+            if (eggsConfig -> randomMissing != NULL)
+                create_random_mask(mask, replicate -> numSamples, 0, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing, site);
+            // If we are using beta or EGGS methods.
             else 
-                // Pass the record's corresponding mask.
-                print_record(temp, mask, eggsConfig, fpOut);
+                create_random_mask(mask, replicate -> numSamples, i, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing, site);
+            print_record(temp, site, eggsConfig, fpOut);
             temp = temp -> nextRecord;
         }
     } else {
@@ -264,15 +270,15 @@ void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
     // Calculate and set mean.
     double mean = 0;
     for (int i = 0; i < dis -> numRecords; i++)
-        mean += dis -> proportions[i] / (double) dis -> numRecords;
-    *mu = mean;
+        mean += dis -> proportions[i];
+    *mu = mean / (double) dis -> numRecords;
 
     // Calculate and set variance.
     double var = 0;
     for (int i = 0; i < dis -> numRecords; i++)
-        var += (dis -> proportions[i] - mean) * (dis -> proportions[i] - mean) / (dis -> numRecords - 1.0);
-    *sigma = sqrt(var);
-    
+        var += (dis -> proportions[i] - *mu) * (dis -> proportions[i] - *mu);
+    *sigma = sqrt(var / (dis -> numRecords - 1.0));
+
     destroy_missing_distribution(dis);
     destroy_replicate(replicate);
 }
@@ -288,12 +294,9 @@ int main(int argc, char* argv[]) {
     
     // If a VCF file was given for random missingness, calculate mean and standard deviation per site.
     if (eggsConfig -> betaMissing != NULL && eggsConfig -> meanMissing == -1 && eggsConfig -> stdMissing == -1) {
-        InputStream_t* inputStream = init_input_stream(eggsConfig -> betaMissing);
-        double mu = 0, sigma = 0;
-        get_mu_sigma(inputStream, &mu, &sigma);
-        eggsConfig -> meanMissing = mu;
-        eggsConfig -> stdMissing = sigma;
-        destroy_input_stream(inputStream);
+        InputStream_t* betaStream = init_input_stream(eggsConfig -> betaMissing);
+        get_mu_sigma(betaStream, &(eggsConfig -> meanMissing), &(eggsConfig -> stdMissing));
+        destroy_input_stream(betaStream);
         if (eggsConfig -> meanMissing >= 1 || eggsConfig -> meanMissing <= 0 || eggsConfig -> stdMissing <= 0 || eggsConfig -> stdMissing * eggsConfig -> stdMissing >= eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) {
             fprintf(stderr, "mu=%lf,sigma=%lf must satisfy parameters for a beta distribution. Exiting!\n", eggsConfig -> meanMissing, eggsConfig -> stdMissing);
             destroy_eggs_configuration(eggsConfig);
@@ -316,7 +319,33 @@ int main(int argc, char* argv[]) {
         destroy_eggs_configuration(eggsConfig);
         return -1;
     }
-    
+
+    // Read in distribution if supplied.
+    MissingDistribution_t* mask = NULL;
+    InputStream_t* maskInput = NULL;
+    Replicate_t* missingReplicate = NULL;
+    if (eggsConfig -> maskFile != NULL) {
+        maskInput = init_input_stream(eggsConfig -> maskFile);
+        missingReplicate = init_vcf_replicate(maskInput);
+        mask = init_missing_distribution(missingReplicate, maskInput);
+        destroy_input_stream(maskInput);
+        destroy_replicate(missingReplicate);
+    } else if (eggsConfig -> randomMissing != NULL) {
+        maskInput = init_input_stream(eggsConfig -> randomMissing);
+        missingReplicate = init_vcf_replicate(maskInput);
+        mask = init_missing_distribution(missingReplicate, maskInput);
+        destroy_input_stream(maskInput);
+        destroy_replicate(missingReplicate);
+    } else if (eggsConfig -> betaMissing != NULL) {
+        mask = calloc(1, sizeof(MissingDistribution_t));
+        // Beta distribution just needs rng.
+        gsl_rng_env_setup();
+        const gsl_rng_type* T = gsl_rng_default;
+        gsl_rng* r = gsl_rng_alloc(T);
+        gsl_rng_set(r, time(NULL));
+        mask -> r = r;
+    }
+
     // If VCF.
     if (strncmp(inputStream -> buffer -> s, "##fileformat=VCF", 16) == 0) {
         // If output basename was given, open file. Otherwise, we are printing to stdout.
@@ -333,61 +362,15 @@ int main(int argc, char* argv[]) {
             fpOut = gzdopen(fileno(stdout), "w");
         }
 
-        Mask_t* mask = NULL;
         Replicate_t* replicate = init_vcf_replicate(inputStream);
-        
-        if (eggsConfig -> maskFile != NULL || eggsConfig -> randomMissing != NULL) {
-
-            // Read in mask file.
-            InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile != NULL ? eggsConfig -> maskFile : eggsConfig -> randomMissing);
-            Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
-
-            // Calculate proportion of missing samples at each site.
-            MissingDistribution_t* dis = init_missing_distribution(maskReplicate, maskInput);
-            if (eggsConfig -> maskFile != NULL)
-                mask = create_missing_mask(dis, replicate -> numSamples, replicate -> numRecords);
-            else 
-                mask = create_random_mask(dis, replicate -> numSamples, replicate -> numRecords, -1, -1);
-            
-            destroy_input_stream(maskInput);
-            destroy_replicate(maskReplicate);
-            destroy_missing_distribution(dis);
-        // If we want to create a beta mask.
-        } else if (eggsConfig -> betaMissing != NULL) {
-            // Create our beta mask.
-            mask = create_random_mask(NULL, replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
-
-        } 
-        
-        // If no ms output and mask was created, then we can just sequentually print records out.
-        if (!eggsConfig -> msOutput && mask == NULL) {
-            Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
-            record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
-            record -> numSamples = replicate -> numSamples;
-            while (get_next_vcf_record(record, inputStream))
-                print_record(record, NULL, eggsConfig, fpOut);
-            destroy_record(record);
-        } else {
-            parse_vcf(replicate, inputStream);
-            print_replicate(replicate, mask, eggsConfig, fpOut);
-        }
-        
+        parse_vcf(replicate, inputStream);
+        print_replicate(replicate, mask, eggsConfig, fpOut);
         destroy_replicate(replicate);
         gzclose(fpOut);
-        destroy_mask(mask);
 
     // Otherwise, parse as ms-style input.
     } else {
         Replicate_t* replicate = NULL;
-        MissingDistribution_t* dis = NULL;
-
-        if (eggsConfig -> maskFile != NULL || eggsConfig -> randomMissing != NULL) {
-            InputStream_t* maskInput = init_input_stream(eggsConfig -> maskFile != NULL ? eggsConfig -> maskFile : eggsConfig -> randomMissing);
-            Replicate_t* maskReplicate = init_vcf_replicate(maskInput);
-            dis = init_missing_distribution(maskReplicate, maskInput);
-            destroy_input_stream(maskInput);
-            destroy_replicate(maskReplicate);
-        }
 
         // For each replicate in the ms-style input.
         int length;
@@ -396,15 +379,6 @@ int main(int argc, char* argv[]) {
         else 
             length = eggsConfig -> length;
         while ((replicate = parse_ms(inputStream, length, eggsConfig -> hap)) != NULL) {
-            Mask_t* mask = NULL;
-            if (eggsConfig -> maskFile != NULL)
-                mask = create_missing_mask(dis, replicate -> numSamples, replicate -> numRecords);
-            // Generate our beta mask.
-            else if (eggsConfig -> betaMissing != NULL) 
-                mask = create_random_mask(NULL, replicate -> numSamples, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing);
-            // If user defined distribution was given.
-            else if (eggsConfig -> randomMissing != NULL) 
-                mask = create_random_mask(dis, replicate -> numSamples, replicate -> numRecords, -1, -1);
             
             gzFile fpOut;
             // If no basename given and only one replicate, then we print to stdout.
@@ -439,14 +413,13 @@ int main(int argc, char* argv[]) {
 
             gzclose(fpOut);
             destroy_replicate(replicate);
-            destroy_mask(mask);
             numReps++;
         }
-        destroy_missing_distribution(dis);
     }
 
     destroy_eggs_configuration(eggsConfig);
     destroy_input_stream(inputStream);
+    destroy_missing_distribution(mask);
 
     return 0;
 }

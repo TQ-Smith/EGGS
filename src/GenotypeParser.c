@@ -1,5 +1,5 @@
 
-// File: GenotypeParser.h
+// File: GenotypeinputStream.h
 // Date: 13 May 2025
 // Author: T. Quinn Smith
 // Principal Investigator: Dr. Zachary A. Szpiech
@@ -74,48 +74,49 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
 
 bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream) {
 
-    int dret = 0, numAlleles = 2;
+    int dret = 0, numTabs = 0, prevIndex = 0, numAlleles = 2;
 
     // Get the next line.
     ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, &dret);
 
     // If end of file, return false.
-    if (ks_eof(inputStream -> fpIn) || inputStream -> buffer -> l == 0) 
+    if (ks_eof(inputStream -> fpIn) || inputStream -> buffer -> l == 0)
         return false;
 
-    // We parse the record. This is messier than splitting on tab.
-    char* line = strdup(inputStream -> buffer -> s);
-    char* tok = strtok(line, "\t");
-    if (record -> chrom != NULL)
-        free(record -> chrom);
-    record -> chrom = strdup(tok);
-    for (int i = 1; i < 9 + record -> numSamples; i++) {
-        tok = strtok(NULL, "\t");
-        if (i == 1)
-            record -> position = (int) strtol(tok, (char**) NULL, 10);
-        else if (i == 3) {
-            if (record -> ref != NULL)
-                free(record -> ref);
-            record -> ref = strdup(tok);
-        } else if (i == 4) {
-            for (int j = 0; j < strlen(tok); j++)
-                if (tok[j] == ',')
-                    numAlleles++;
-            if (record -> alts != NULL)
-                free(record -> alts);
-            record -> alts = strdup(tok);
-        } else if (i > 8) {
-            record -> genotypes[i - 9].left = MISSING;
-            record -> genotypes[i - 9].right = MISSING;
-            record -> genotypes[i - 9].isPhased = false;
-            char* start = strdup(tok);
-            char* next = start;
-            if (start[0] != '.')
-                record -> genotypes[i - 9].left = (int) strtol(start, &next, 10);
-            if (next[0] == '|')
-                record -> genotypes[i - 9].isPhased = true;
-            if ((next[0] == '|' || next[0] == '/') && next[1] != '.')
-                record -> genotypes[i - 9].right = (int) strtol(next + 1, (char**) NULL, 10);
+    // This is alittle clunky, but I think it is faster than splitting on '\t'.
+    for (int i = 0; i <= inputStream -> buffer -> l; i++) {
+        // If end of the line is reached or a tab was encountered.
+        if (i == inputStream -> buffer -> l || inputStream -> buffer -> s[i] == '\t') {
+            if (numTabs == 0) {
+                // The first field in a record is the chromosome name.
+                if (record -> chrom != NULL)
+                    free(record -> chrom);
+                record -> chrom = strndup(inputStream -> buffer -> s, i);
+            } else if (numTabs == 1) {
+                // The second field is the position on the chromosome.
+                record -> position = (int) strtol(inputStream -> buffer -> s + prevIndex + 1, (char**) NULL, 10);
+            } else if (numTabs == 4) {
+                // The fifth field holds the ALT alleles. Each record has at least two alleles.
+                //  Each additional allele is appended withinputStream -> buffer -> s a ','. For each ',' encountered,
+                //  increment the number of alleles in the record.
+                for (int j = prevIndex + 1; inputStream -> buffer -> s[j] != '\t'; j++)
+                    if (inputStream -> buffer -> s[j] == ',')
+                        numAlleles++;
+            } else if (numTabs > 8) {
+                record -> genotypes[numTabs - 9].left = MISSING;
+                record -> genotypes[numTabs - 9].right = MISSING;
+                record -> genotypes[numTabs - 9].isPhased = false;
+                char* start = inputStream -> buffer -> s + prevIndex + 1;
+                char* next = start;
+                if (start[0] != '.')
+                    record -> genotypes[numTabs - 9].left = (int) strtol(start, &next, 10);
+                if (next[0] == '|')
+                    record -> genotypes[numTabs - 9].isPhased = true;
+                if ((next[0] == '|' || next[0] == '/') && next[1] != '.')
+                    record -> genotypes[numTabs - 9].right = (int) strtol(next + 1, (char**) NULL, 10);
+            }
+            prevIndex = i;
+            numTabs++;
         }
     }
     record -> numAlleles = numAlleles;
@@ -146,8 +147,7 @@ void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream) {
             }
             replicate -> numRecords++;
         } else {
-            free(record -> genotypes);
-            free(record);
+            destroy_record(record);
             break;
         }
         recordIndex++;
