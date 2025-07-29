@@ -364,6 +364,7 @@ int main(int argc, char* argv[]) {
 
         Replicate_t* replicate = init_vcf_replicate(inputStream);
         parse_vcf(replicate, inputStream);
+        print_vcf_header(replicate, eggsConfig, fpOut);
         print_replicate(replicate, mask, eggsConfig, fpOut);
         destroy_replicate(replicate);
         gzclose(fpOut);
