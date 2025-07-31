@@ -20,9 +20,9 @@ void print_help() {
     fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
     fprintf(stderr, "The Pennsylvania State University\n\n");
     fprintf(stderr, "Usage: eggs [OPTIONS]\n\n");
-    fprintf(stderr, "Reads from stdin and write to stdout unless -o is provided.\n");
+    fprintf(stderr, "Reads from stdin, and unless -o is provided, writes to stdout.\n");
     fprintf(stderr, "OPTIONS:\n");
-    fprintf(stderr, "    -h,--help                       Print help.\n");
+    fprintf(stderr, "    -h,--help                       Print help and exit.\n");
     fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
     fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
@@ -32,8 +32,8 @@ void print_help() {
     fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta dsitribution for missingness.\n");
     fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from VCF and uses that\n");
     fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
-    fprintf(stderr, "    -d,--deamin     STR             Two comma-seperated proportions \"prop1,prop2\" where prop1 is the probability\n");
-    fprintf(stderr, "                                        the site is a transition and prop2 is the probability of deamination.\n");
+    fprintf(stderr, "    -d,--deamin     STR             Two comma-seperated proportions \"prob1,prob2\" where prob1 is the probability\n");
+    fprintf(stderr, "                                        the site is a transition and prob2 is the probability of deamination.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segment in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs if not provided or invalid.\n");
     fprintf(stderr, "    -a,--hap                        Only used with ms-style input/output. Treat each diploid as only one lineage.\n");
@@ -41,6 +41,8 @@ void print_help() {
     fprintf(stderr, "    -x,--ms                         Output ms-style replicates. Cannot use missing data options.\n");
     fprintf(stderr, "                                        If a genotype is missing, then the ancestral is used. If multiallelic VCF site,\n");
     fprintf(stderr, "                                        then any alternative alleles are treated as derived.\n");
+    fprintf(stderr, "    -v,--verbose                    Print summary statistics for missingness at the individual and locus level.\n");
+    fprintf(stderr, "                                        Ignore other options. Only used with VCF input.\n");
     fprintf(stderr, "\n");
 }
 
@@ -58,6 +60,7 @@ static ko_longopt_t long_options[] = {
     {"hap",             ko_no_argument,         'a'},
     {"deamin",          ko_required_argument,   'b'},
     {"ms",              ko_no_argument,         'x'},
+    {"verbose",         ko_no_argument,         'v'},
     {0, 0, 0}
 };
 
@@ -68,6 +71,10 @@ int check_configuration(EggsConfig_t* eggsConfig) {
     int numSet = (int) (eggsConfig -> randomMissing != NULL) + (int) (eggsConfig -> maskFile != NULL) + (int) (eggsConfig -> betaMissing != NULL) + (int) (eggsConfig -> msOutput);
     if (numSet > 1) {
         fprintf(stderr, "Cannot use -m, -b, -r, or -x options together. Exiting!\n");
+        return -1;
+    }
+    if (numSet > 1 && eggsConfig -> verbose) {
+        fprintf(stderr, "Do not used mask options with -v. Exiting!\n");
         return -1;
     }
     // If mask file given, make sure it exists.
@@ -124,7 +131,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hxaupso:m:r:l:b:d:";
+    const char *opt_str = "hxaupsvo:m:r:l:b:d:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -154,6 +161,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> probDeamination = 0;
     eggsConfig -> probTransition = 0;
     eggsConfig -> msOutput = false;
+    eggsConfig -> verbose = false;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
@@ -171,6 +179,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'a': eggsConfig -> hap = true;
             case 'd': eggsConfig -> deamin = strdup(options.arg); break;
             case 'x': eggsConfig -> msOutput = true; break;
+            case 'v': eggsConfig -> verbose = true; break;
         }
 	}
 

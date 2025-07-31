@@ -18,6 +18,55 @@
 // Easy random uniform float with [0, 1)
 #define rand() ((float) rand() / (float) (RAND_MAX))
 
+void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) {
+    // Standard error by default.
+    FILE* indOut = stdout;
+    FILE* lociOut = stdout;
+    if (outName != NULL) {
+        kstring_t* out = calloc(1, sizeof(kstring_t));
+        ksprintf(out, "%s.ind.tsv", outName);
+        indOut = fopen(out -> s, "w");
+        free(out -> s); free(out);
+        kstring_t* out2 = calloc(1, sizeof(kstring_t));
+        ksprintf(out2, "%s.loci.tsv", outName);
+        lociOut = fopen(out2 -> s, "w");
+        free(out2 -> s); free(out2);
+    }
+
+    int* sampleProportions = calloc(replicate -> numSamples, sizeof(int));
+
+    Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
+    record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
+    record -> numSamples = replicate -> numSamples;
+    
+    // Print loci file.
+    fprintf(lociOut, "CHROM\tPOS\tPROP_MISSING\n");
+    int numRecords = 0;
+    while (get_next_vcf_record(record, inputStream)) {
+        int numMissing = 0;
+        for (int i = 0; i < replicate -> numSamples; i++) {
+            if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING) {
+                sampleProportions[i] += 1;
+                numMissing++;
+            }
+        }
+        fprintf(lociOut, "%s\t%d\t%lf\n", record -> chrom, record -> position, numMissing / (double) replicate -> numSamples);
+        numRecords++;
+    }
+
+    if (outName == NULL) fprintf(stdout, "\n");
+
+    // Print sample files.
+    fprintf(indOut, "SAMPLE\tPROP_MISSING\n");
+    for (int i = 0; i < replicate -> numSamples; i++)
+        fprintf(indOut, "%s\t%lf\n", replicate -> sampleNames[i], sampleProportions[i] / (double) numRecords);
+
+    destroy_record(record);
+    free(sampleProportions);
+    fclose(indOut);
+    fclose(lociOut);
+}
+
 // Print a simple VCF header from a replicate.
 void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
     gzprintf(fpOut, "##fileformat=VCFv4.2\n");
@@ -348,6 +397,17 @@ int main(int argc, char* argv[]) {
 
     // If VCF.
     if (strncmp(inputStream -> buffer -> s, "##fileformat=VCF", 16) == 0) {
+
+        // If verbose summary statistics only.
+        if (eggsConfig -> verbose) {
+            Replicate_t* replicate = init_vcf_replicate(inputStream);
+            summary(replicate, inputStream, eggsConfig -> outFile);
+            destroy_replicate(replicate);
+            destroy_input_stream(inputStream);
+            destroy_eggs_configuration(eggsConfig);
+            return 0;
+        }
+
         // If output basename was given, open file. Otherwise, we are printing to stdout.
         gzFile fpOut;
         if (eggsConfig -> outFile != NULL) {

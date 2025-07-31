@@ -43,6 +43,8 @@ typedef struct {
     double probDeamination;
     // Use ms-style output.
     bool msOutput;
+    // Use verbose output.
+    bool verbose;
     // The EGGS command the user ran.
     char* command;
 } EggsConfig_t;

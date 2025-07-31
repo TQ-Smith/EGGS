@@ -54,9 +54,8 @@ MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputSt
 
     dis -> proportions = (double*) calloc(numRecords, sizeof(double));
     dis -> numRecords = numRecords;
-    for (int i = 0; i < numRecords; i++) {
+    for (int i = 0; i < numRecords; i++) 
         dis -> proportions[i] = kv_A(proportions, i);
-    }
 
     destroy_record(record);
     kv_destroy(proportions);
