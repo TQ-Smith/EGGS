@@ -293,7 +293,7 @@ void print_replicate(Replicate_t* replicate, MissingDistribution_t* mask, EggsCo
             if (eggsConfig -> randomMissing != NULL)
                 create_random_mask(mask, replicate -> numSamples, 0, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing, site);
             // If we are using beta or EGGS methods.
-            else 
+            if (eggsConfig -> betaMissing != NULL || eggsConfig -> maskFile != NULL)
                 create_random_mask(mask, replicate -> numSamples, i, replicate -> numRecords, eggsConfig -> meanMissing, eggsConfig -> stdMissing, site);
             print_record(temp, site, eggsConfig, fpOut);
             temp = temp -> nextRecord;
@@ -466,9 +466,7 @@ int main(int argc, char* argv[]) {
             }
 
             // Print out replicate.
-            if (eggsConfig -> msOutput)
-                gzprintf(fpOut, "%s\n", eggsConfig -> command);
-            else
+            if (!eggsConfig -> msOutput)
                 print_vcf_header(replicate, eggsConfig, fpOut);
             print_replicate(replicate, mask, eggsConfig, fpOut);
 
