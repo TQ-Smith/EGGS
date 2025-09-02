@@ -223,16 +223,10 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
 
         for (int i = 0; i < replicate -> numSamples; i++) {
 
-            // Put non missing in left. If missing, use ancestral. If multiallelic use alternative.
-            if (!temp -> genotypes[i].isPhased) {
-                if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right != MISSING)
-                    SWAP(temp -> genotypes[i].left, temp -> genotypes[i].right, tempInt);
-                if (temp -> genotypes[i].right == MISSING)
-                    temp -> genotypes[i].right = 0;
-            }
-            if (temp -> genotypes[i].left > 0)
+            // If missing, use ancestral. If multiallelic use alternative.
+            if (temp -> genotypes[i].left > 1 || temp -> genotypes[i].left == MISSING)
                 temp -> genotypes[i].left = 1;
-            if (temp -> genotypes[i].right > 0)
+            if (temp -> genotypes[i].right > 1 || temp -> genotypes[i].right == MISSING)
                 temp -> genotypes[i].right = 1;
 
             // If genotypes should be unphased with a 50/50 chance.
@@ -268,9 +262,8 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
     for (int i = 0; i < replicate -> numSamples; i++) {
         for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord)
             gzprintf(fpOut, "%d", temp -> genotypes[i].left);
-        if (!eggsConfig -> hap)
-            for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord)
-                gzprintf(fpOut, "%d", temp -> genotypes[i].right);
+        for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord)
+            gzprintf(fpOut, "%d", temp -> genotypes[i].right);
         gzprintf(fpOut, "\n");
     }
 }
@@ -338,6 +331,7 @@ int main(int argc, char* argv[]) {
 
     // Get CLI configuration.
     EggsConfig_t* eggsConfig = init_eggs_configuration(argc, argv);
+    
     if (eggsConfig == NULL)
         return -1;
     
@@ -431,6 +425,7 @@ int main(int argc, char* argv[]) {
 
     // Otherwise, parse as ms-style input.
     } else {
+        
         Replicate_t* replicate = NULL;
 
         // For each replicate in the ms-style input.
@@ -439,6 +434,7 @@ int main(int argc, char* argv[]) {
             length = 1000000;
         else 
             length = eggsConfig -> length;
+        
         while ((replicate = parse_ms(inputStream, length, eggsConfig -> hap)) != NULL) {
             
             gzFile fpOut;

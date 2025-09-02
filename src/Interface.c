@@ -36,8 +36,8 @@ void print_help() {
     fprintf(stderr, "                                        the site is a transition and prob2 is the probability of deamination.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segment in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs if not provided or invalid.\n");
-    fprintf(stderr, "    -a,--hap                        Only used with ms-style input/output. Treat each diploid as only one lineage.\n");
-    fprintf(stderr, "                                        For ms-style output, non-missing allele is used.\n");
+    fprintf(stderr, "    -a,--hap                        For VCF input, split diploid to seperate samples.\n");
+    fprintf(stderr, "                                        Cannot use with -x option.\n");
     fprintf(stderr, "    -x,--ms                         Output ms-style replicates. Cannot use missing data options.\n");
     fprintf(stderr, "                                        If a genotype is missing, then the ancestral is used. If multiallelic VCF site,\n");
     fprintf(stderr, "                                        then any alternative alleles are treated as derived.\n");
@@ -85,6 +85,11 @@ int check_configuration(EggsConfig_t* eggsConfig) {
     // If beta file given, make sure it exists.
     if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) != 0) {
         fprintf(stderr, "-r %s does not exist. Exiting!\n", eggsConfig -> randomMissing);
+        return -1;
+    }
+    // Cannot use -a and -x options together.
+    if (eggsConfig -> hap && eggsConfig -> msOutput) {
+        fprintf(stderr, "Cannot use -x and -a together. Exiting!\n");
         return -1;
     }
     // If beta was given and VCF file does not exists, then parser values directly.
@@ -176,13 +181,13 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
             case 'b': eggsConfig -> betaMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
-            case 'a': eggsConfig -> hap = true;
+            case 'a': eggsConfig -> hap = true; break;
             case 'd': eggsConfig -> deamin = strdup(options.arg); break;
             case 'x': eggsConfig -> msOutput = true; break;
             case 'v': eggsConfig -> verbose = true; break;
         }
 	}
-
+    
     // If a parameter was invalid, we return null.
     if (check_configuration(eggsConfig) != 0) {
         destroy_eggs_configuration(eggsConfig);

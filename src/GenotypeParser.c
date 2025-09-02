@@ -212,7 +212,7 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length, bool hap) {
     Replicate_t* replicate = (Replicate_t*) calloc(1, sizeof(Replicate_t));
     replicate -> numSamples = hap ? numLineages : numLineages / 2;
     replicate -> numRecords = segsites;
-
+    
     // For each segsite.
     for (int i = 0; i < replicate -> numRecords; i++) {
         // Create record.
