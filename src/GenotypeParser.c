@@ -185,7 +185,7 @@ Replicate_t* parse_ms(InputStream_t* inputStream, int length, bool hap) {
     } while (strncmp(inputStream -> buffer -> s, "positions:", 10) != 0);
 
     // Get the position of each segsite and add to list.
-    int numSpaces = 0, prevIndex = 0, prevPos = 1;
+    int numSpaces = 0, prevIndex = 0, prevPos = 0;
     for (int i = 0; i <= inputStream -> buffer -> l; i++) {
         if (inputStream -> buffer -> s[i] == ' ' || i == inputStream -> buffer -> l) {
             if (numSpaces > 0) {
