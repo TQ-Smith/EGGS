@@ -20,23 +20,25 @@ void print_help() {
     fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
     fprintf(stderr, "The Pennsylvania State University\n\n");
     fprintf(stderr, "Usage: eggs [OPTIONS]\n\n");
-    fprintf(stderr, "Reads from stdin, and unless -o is provided, writes to stdout.\n");
+    fprintf(stderr, "Reads from stdin and writes to stdout by default.\n");
     fprintf(stderr, "OPTIONS:\n");
     fprintf(stderr, "    -h,--help                       Print help and exit.\n");
+    fprintf(stderr, "    -e,--eigenstrat GENO,SNP,IND    Ignores all other options except -o. Reads in EIGENSTRAT/ANCESTRYMAP files\n");
+    fprintf(stderr, "                                         and outputs VCF equivalent.\n");
     fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
     fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
-    fprintf(stderr, "    -m,--mask       VCF             Filename of VCF to use as mask for missing genotypes.\n");
+    fprintf(stderr, "    -m,--mask       VCF             Filename to use as mask for missing genotypes.\n");
     fprintf(stderr, "    -b,--beta       VCF/STR         Calculate mu/sigma of missingness per site from VCF or supply as\n");
     fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta dsitribution for missingness.\n");
-    fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from VCF and uses that\n");
+    fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from file and uses that\n");
     fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
     fprintf(stderr, "    -d,--deamin     STR             Two comma-seperated proportions \"prob1,prob2\" where prob1 is the probability\n");
     fprintf(stderr, "                                        the site is a transition and prob2 is the probability of deamination.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segment in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs if not provided or invalid.\n");
-    fprintf(stderr, "    -a,--hap                        For VCF input, split diploid to seperate samples.\n");
+    fprintf(stderr, "    -a,--hap                        Split diploid to seperate samples.\n");
     fprintf(stderr, "                                        Cannot use with -x option.\n");
     fprintf(stderr, "    -x,--ms                         Output ms-style replicates. Cannot use missing data options.\n");
     fprintf(stderr, "                                        If a genotype is missing, then the ancestral is used. If multiallelic VCF site,\n");
@@ -49,6 +51,7 @@ void print_help() {
 // Our options.
 static ko_longopt_t long_options[] = {
     {"help",            ko_no_argument,         'h'},
+    {"eigenstrat",      ko_required_argument,   'e'},
     {"unphase",         ko_no_argument,         'u'},
     {"unpolarize",      ko_no_argument,         'p'},
     {"pseudohap",       ko_no_argument,         's'},
@@ -64,6 +67,17 @@ static ko_longopt_t long_options[] = {
     {0, 0, 0}
 };
 
+// Check if eigen files exists.
+bool doesExist(char* fileNames) {
+    char* files = strdup(fileNames);
+    char* genoFile = strtok(files, ",");
+    char* snpFile = strtok(NULL, ",");
+    char* indFile = strtok(NULL, ",");
+    bool exist = (access(genoFile, F_OK) == 0) && (access(snpFile, F_OK) == 0) && (access(indFile, F_OK) == 0);
+    free(files);
+    return exist;
+}
+
 // Accepts parsed parameters from user and ensures they are valid.
 // Returns: 0, if valid. -1, if invalid.
 int check_configuration(EggsConfig_t* eggsConfig) {
@@ -77,12 +91,17 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         fprintf(stderr, "Do not used mask options with -v. Exiting!\n");
         return -1;
     }
-    // If mask file given, make sure it exists.
+    // If eigenstrat files given, make sure it exists.
+    if (eggsConfig -> eigenFiles != NULL && !doesExist(eggsConfig -> eigenFiles)) {
+        fprintf(stderr, "-e %s do not exist. Three files must be given: GENO,SNP,IND Exiting!\n", eggsConfig -> eigenFiles);
+        return -1;
+    }
+    // If mask files given, make sure it exists.
     if (eggsConfig -> maskFile != NULL && access(eggsConfig -> maskFile, F_OK) != 0) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
         return -1;
     }
-    // If beta file given, make sure it exists.
+    // If beta files given, make sure it exists.
     if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) != 0) {
         fprintf(stderr, "-r %s does not exist. Exiting!\n", eggsConfig -> randomMissing);
         return -1;
@@ -92,7 +111,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         fprintf(stderr, "Cannot use -x and -a together. Exiting!\n");
         return -1;
     }
-    // If beta was given and VCF file does not exists, then parser values directly.
+    // If beta was given and files does not exists, then parse values directly.
     if (eggsConfig -> betaMissing != NULL && access(eggsConfig -> betaMissing, F_OK) != 0) {
         char* meanstd = strdup(eggsConfig -> betaMissing);
         char* next  = NULL;
@@ -136,7 +155,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hxaupsvo:m:r:l:b:d:";
+    const char *opt_str = "hxaupsvo:m:r:l:b:d:e:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -151,6 +170,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
     // Set configuration defaults.
     EggsConfig_t* eggsConfig = (EggsConfig_t*) calloc(1, sizeof(EggsConfig_t));
+    eggsConfig -> eigenFiles = NULL;
     eggsConfig -> unphase = false;
     eggsConfig -> unpolarize = false;
     eggsConfig -> pseudohap = false;
@@ -173,6 +193,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     options = KETOPT_INIT;
     while ((c = ketopt(&options, argc, argv, 1, opt_str, long_options)) >= 0) {
         switch (c) {
+            case 'e': eggsConfig -> eigenFiles = strdup(options.arg); break;
             case 'u': eggsConfig -> unphase = true; break;
             case 'p': eggsConfig -> unpolarize = true; break;
             case 's': eggsConfig -> pseudohap = true; break;
@@ -219,5 +240,7 @@ void destroy_eggs_configuration(EggsConfig_t* eggsConfig) {
         free(eggsConfig -> command);
     if (eggsConfig -> deamin != NULL)
         free(eggsConfig -> deamin);
+    if (eggsConfig -> eigenFiles != NULL)
+        free(eggsConfig -> eigenFiles);
     free(eggsConfig);
 }

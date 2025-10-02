@@ -18,6 +18,66 @@
 // Easy random uniform float with [0, 1)
 #define rand() ((float) rand() / (float) (RAND_MAX))
 
+// Convert eigen/ancestry map format to VCF file.
+void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOut) {
+    gzFile geno = gzopen(genoFile, "r");
+    gzFile snp = gzopen(snpFile, "r");
+    gzFile ind = gzopen(indFile, "r");
+    kstream_t* genoStream = ks_init(geno);
+    kstream_t* snpStream = ks_init(snp);
+    kstream_t* indStream = ks_init(ind);
+    kstring_t* genoBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
+    kstring_t* snpBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
+    kstring_t* indBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
+
+    // Print the VCF header information.
+    gzprintf(fpOut, "##fileformat=VCFv4.2\n");
+    gzprintf(fpOut, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n");
+    gzprintf(fpOut, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");   
+    // Print the sample names in the header.
+    while (!ks_eof(indStream)) {
+        ks_getuntil(indStream, '\n', indBuffer, 0);
+        int endIndex = -1;
+        int startIndex = -1;
+        for (int i = 0; i < strlen(indBuffer -> s); i++) {
+            if (indBuffer -> s[i] != ' ') {
+                startIndex = i;
+                break;
+            }
+        }
+        for (int i = 0; i < strlen(indBuffer -> s) - 3; i++) {
+            if (indBuffer -> s[i] == ' ' && indBuffer -> s[i+1] == 'M' && indBuffer -> s[i+2] == ' ') {
+                endIndex = i;
+                break;
+            }
+            if (indBuffer -> s[i] == ' ' && indBuffer -> s[i+1] == 'F' && indBuffer -> s[i+2] == ' ') {
+                endIndex = i;
+                break;
+            }
+            if (indBuffer -> s[i] == ' ' && indBuffer -> s[i+1] == 'U' && indBuffer -> s[i+2] == ' ') {
+                endIndex = i;
+                break;
+            }
+        }
+        char* sampleName = strndup(indBuffer -> s + startIndex, (endIndex - startIndex + 1));
+        gzprintf(fpOut, "\t%s", sampleName);
+        free(sampleName);
+    }
+    gzprintf(fpOut, "\n");
+    
+    // Now, we parse each site.
+
+    free(genoBuffer -> s); free(genoBuffer);
+    free(snpBuffer -> s); free(snpBuffer);
+    free(indBuffer -> s); free(indBuffer);
+    ks_destroy(genoStream);
+    ks_destroy(snpStream);
+    ks_destroy(indStream);
+    gzclose(geno);
+    gzclose(snp);
+    gzclose(ind);
+}
+
 void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) {
     // Standard error by default.
     FILE* indOut = stdout;
@@ -334,6 +394,30 @@ int main(int argc, char* argv[]) {
     
     if (eggsConfig == NULL)
         return -1;
+    
+    // If -e was set, convert file and exit.
+    if (eggsConfig -> eigenFiles != NULL) {
+        char* fileNames = strdup(eggsConfig -> eigenFiles);
+        char* genoFile = strtok(fileNames, ",");
+        char* snpFile = strtok(NULL, ",");
+        char* indFile = strtok(NULL, ",");
+        // Open output stream.
+        gzFile fpOut;
+        if (eggsConfig -> outFile != NULL) {
+            kstring_t* outName = (kstring_t*) calloc(1, sizeof(kstring_t));
+            ksprintf(outName, "%s.vcf.gz", eggsConfig -> outFile);
+            fpOut = gzopen(outName -> s, "w");
+            free(outName -> s); free(outName);
+        } else {
+            fpOut = gzdopen(fileno(stdout), "w");
+        }
+        // Convert and print.
+        convertEigenToVCF(genoFile, snpFile, indFile, fpOut);
+        // Exit.
+        free(fileNames);
+        destroy_eggs_configuration(eggsConfig);
+        return 1;
+    }
     
     // If a VCF file was given for random missingness, calculate mean and standard deviation per site.
     if (eggsConfig -> betaMissing != NULL && eggsConfig -> meanMissing == -1 && eggsConfig -> stdMissing == -1) {

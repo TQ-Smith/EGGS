@@ -45,6 +45,8 @@ typedef struct {
     bool msOutput;
     // Use verbose output.
     bool verbose;
+    // EIGENSTRAT files.
+    char* eigenFiles;
     // The EGGS command the user ran.
     char* command;
 } EggsConfig_t;
