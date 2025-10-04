@@ -18,6 +18,8 @@
 // Easy random uniform float with [0, 1)
 #define rand() ((float) rand() / (float) (RAND_MAX))
 
+#define MAX_LINE_LENGTH 256 
+
 // Convert eigen/ancestry map format to VCF file.
 void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOut) {
     gzFile geno = gzopen(genoFile, "r");
@@ -37,35 +39,34 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
     // Print the sample names in the header.
     while (!ks_eof(indStream)) {
         ks_getuntil(indStream, '\n', indBuffer, 0);
-        int endIndex = -1;
-        int startIndex = -1;
-        for (int i = 0; i < strlen(indBuffer -> s); i++) {
-            if (indBuffer -> s[i] != ' ') {
-                startIndex = i;
-                break;
-            }
-        }
-        for (int i = 0; i < strlen(indBuffer -> s) - 3; i++) {
-            if (indBuffer -> s[i] == ' ' && indBuffer -> s[i+1] == 'M' && indBuffer -> s[i+2] == ' ') {
-                endIndex = i;
-                break;
-            }
-            if (indBuffer -> s[i] == ' ' && indBuffer -> s[i+1] == 'F' && indBuffer -> s[i+2] == ' ') {
-                endIndex = i;
-                break;
-            }
-            if (indBuffer -> s[i] == ' ' && indBuffer -> s[i+1] == 'U' && indBuffer -> s[i+2] == ' ') {
-                endIndex = i;
-                break;
-            }
-        }
-        char* sampleName = strndup(indBuffer -> s + startIndex, (endIndex - startIndex + 1));
+        char* indLine = strdup(indBuffer -> s);
+        char* sampleName = strtok(indLine, " \t\n");
         gzprintf(fpOut, "\t%s", sampleName);
-        free(sampleName);
+        free(indName);
     }
     gzprintf(fpOut, "\n");
     
     // Now, we parse each site.
+    while (!ks_eof(snpStream)) {
+        ks_getuntil(snpStream, '\n', snpBuffer, 0);
+        // Get all info of the SNP.
+        char* snpLine = strdup(snpBuffer -> s);
+        char* token = strtok(snpLine, " \t\n");
+        char* id = strdup(token); 
+        token = strtok(NULL, " \t\n");
+        char* chrom = strdup(token);
+        token = strtok(NULL, " \t\n");
+        token = strtok(NULL, " \t\n");
+        char* position = strdup(token);
+        token = strtok(NULL, " \t\n");
+        char* ref = strdup(token);
+        token = strtok(NULL, " \t\n");
+        char* alt = strdup(token);
+
+        // Print the site information.
+        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s\n", chrom, id, position, ref, alt);
+        free(snpLine); free(id); free(chrom); free(position); free(ref); free(alt);
+    }
 
     free(genoBuffer -> s); free(genoBuffer);
     free(snpBuffer -> s); free(snpBuffer);
@@ -76,6 +77,86 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
     gzclose(geno);
     gzclose(snp);
     gzclose(ind);
+}
+
+// Convert eigen/ancestry map format to VCF file.
+void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOut) {
+    FILE* geno = fopen(genoFile, "r");
+    FILE* snp = fopen(snpFile, "r");
+    FILE* ind = fopen(indFile, "r");
+    char* line = calloc(MAX_LINE_LENGTH, sizeof(char));
+
+    // Print the VCF header information.
+    gzprintf(fpOut, "##fileformat=VCFv4.2\n");
+    gzprintf(fpOut, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n");
+    gzprintf(fpOut, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");   
+    // Print the sample names in the header.
+    while (fgets(line, MAX_LINE_LENGTH, ind)) {
+        int endIndex = -1;
+        int startIndex = -1;
+        for (int i = 0; i < strlen(line); i++) {
+            if (line[i] != ' ') {
+                startIndex = i;
+                break;
+            }
+        }
+        for (int i = 0; i < strlen(line) - 3; i++) {
+            if (line[i] == ' ' && line[i+1] == 'M' && line[i+2] == ' ') {
+                endIndex = i;
+                break;
+            }
+            if (line[i] == ' ' && line[i+1] == 'F' && line[i+2] == ' ') {
+                endIndex = i;
+                break;
+            }
+            if (line[i] == ' ' && line[i+1] == 'U' && line[i+2] == ' ') {
+                endIndex = i;
+                break;
+            }
+            if (line[i] == '\t' && line[i+1] == 'M' && line[i+2] == '\t') {
+                endIndex = i;
+                break;
+            }
+            if (line[i] == '\t' && line[i+1] == 'F' && line[i+2] == '\t') {
+                endIndex = i;
+                break;
+            }
+            if (line[i] == '\t' && line[i+1] == 'U' && line[i+2] == '\t') {
+                endIndex = i;
+                break;
+            }
+        }
+        char* sampleName = strndup(line + startIndex, (endIndex - startIndex + 1));
+        gzprintf(fpOut, "\t%s", sampleName);
+        free(sampleName);
+    }
+    gzprintf(fpOut, "\n");
+    
+    // Now, we parse each site.
+    while (fgets(line, MAX_LINE_LENGTH, snp)) {
+        // Get all info of the SNP.
+        char* snpLine = strdup(line);
+        char* token = strtok(snpLine, " \t\n");
+        char* id = strdup(token); 
+        token = strtok(NULL, " \t\n");
+        char* chrom = strdup(token);
+        token = strtok(NULL, " \t\n");
+        token = strtok(NULL, " \t\n");
+        char* position = strdup(token);
+        token = strtok(NULL, " \t\n");
+        char* ref = strdup(token);
+        token = strtok(NULL, " \t\n");
+        char* alt = strdup(token);
+
+        // Print the site information.
+        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s\n", chrom, id, position, ref, alt);
+        free(snpLine); free(id); free(chrom); free(position); free(ref); free(alt);
+    }
+
+    free(line);
+    fclose(geno);
+    fclose(snp);
+    fclose(ind);
 }
 
 void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) {
@@ -416,6 +497,7 @@ int main(int argc, char* argv[]) {
         // Exit.
         free(fileNames);
         destroy_eggs_configuration(eggsConfig);
+        gzclose(fpOut);
         return 1;
     }
     

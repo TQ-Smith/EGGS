@@ -23,8 +23,8 @@ void print_help() {
     fprintf(stderr, "Reads from stdin and writes to stdout by default.\n");
     fprintf(stderr, "OPTIONS:\n");
     fprintf(stderr, "    -h,--help                       Print help and exit.\n");
-    fprintf(stderr, "    -e,--eigenstrat GENO,SNP,IND    Ignores all other options except -o. Reads in EIGENSTRAT/ANCESTRYMAP files\n");
-    fprintf(stderr, "                                         and outputs VCF equivalent.\n");
+    fprintf(stderr, "    -e,--eigenstrat GENO,SNP,IND    Ignores all other options except -o. Reads in EIGENSTRAT files\n");
+    fprintf(stderr, "                                         and outputs VCF equivalent. Assumes all sites have REF and ALT alleles.\n");
     fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
     fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
