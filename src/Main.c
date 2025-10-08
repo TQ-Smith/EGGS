@@ -11,6 +11,9 @@
 #include "Missingness.h"
 #include <math.h>
 #include <time.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 // Swap integer values.
 #define SWAP(a, b, temp) { a = temp; a = b; b = temp; }
@@ -18,18 +21,12 @@
 // Easy random uniform float with [0, 1)
 #define rand() ((float) rand() / (float) (RAND_MAX))
 
-#define MAX_LINE_LENGTH 256 
-
 // Convert eigen/ancestry map format to VCF file.
+// Some code was taken from admixtools: https://github.com/DReichLab/AdmixTools/blob/master/src/geno.c
+#define GENO_HEADER_SIZE 48
 void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOut) {
-    gzFile geno = gzopen(genoFile, "r");
-    gzFile snp = gzopen(snpFile, "r");
     gzFile ind = gzopen(indFile, "r");
-    kstream_t* genoStream = ks_init(geno);
-    kstream_t* snpStream = ks_init(snp);
     kstream_t* indStream = ks_init(ind);
-    kstring_t* genoBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
-    kstring_t* snpBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
     kstring_t* indBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
 
     // Print the VCF header information.
@@ -37,18 +34,88 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
     gzprintf(fpOut, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n");
     gzprintf(fpOut, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");   
     // Print the sample names in the header.
-    while (!ks_eof(indStream)) {
+    int numSamplesInd = 0;
+    while (true) {
         ks_getuntil(indStream, '\n', indBuffer, 0);
+        if (ks_eof(indStream))
+            break;
         char* indLine = strdup(indBuffer -> s);
         char* sampleName = strtok(indLine, " \t\n");
         gzprintf(fpOut, "\t%s", sampleName);
-        free(indName);
+        free(indLine);
+        numSamplesInd++;
     }
     gzprintf(fpOut, "\n");
-    
+    free(indBuffer -> s); free(indBuffer);
+    ks_destroy(indStream);
+    gzclose(ind);
+
+    // For reading in geno file.
+    bool transpose = false;
+    char* genoMemStart = NULL;
+    size_t genoMemLength = 0;
+    unsigned char* genos = NULL;
+    int numSnps = 0;
+    int numSamples = 0;
+    size_t rowSizeBytes;
+
+    // Open geno file.
+    struct stat sb;
+    int fd = open(genoFile, O_RDONLY);
+	if(fd < 0){
+        fprintf(stderr, "Invalid genotype file. Exiting!\n");
+		return;
+	}
+
+    // Map memory for file.
+    fstat(fd, &sb);
+	genoMemLength = (unsigned long) sb.st_size;
+	genoMemStart = mmap(NULL, genoMemLength, PROT_READ, MAP_PRIVATE, fd, 0);
+	if(genoMemStart == MAP_FAILED){
+        close(fd);
+        fprintf(stderr, "Could not read in entire genotype file. Exiting!\n");
+		return;
+	}
+	close(fd);
+
+    char header[GENO_HEADER_SIZE+1];
+    header[GENO_HEADER_SIZE] = 0;
+    char matrixType[GENO_HEADER_SIZE];
+    strncpy(header, genoMemStart, GENO_HEADER_SIZE);
+    sscanf(header, "%s %d %d", matrixType, &numSamples, &numSnps);
+    // Check number of samples.
+    if (numSamples != numSamplesInd) {
+        munmap(genoMemStart, genoMemLength);
+        fprintf(stderr, "Unequal number of samples between geno and ind files. Exiting!\n");
+        return;
+    }
+
+    size_t headerSize = GENO_HEADER_SIZE;
+    if(strncmp(matrixType, "GENO", 4) == 0){
+		transpose = false;
+        size_t neededBytes = (size_t) ceil(numSamples / 4.0);
+        rowSizeBytes = (neededBytes > GENO_HEADER_SIZE) ? neededBytes : GENO_HEADER_SIZE;
+        headerSize = rowSizeBytes;
+	} else if (strncmp(matrixType, "TGENO", 5) == 0){
+		transpose = true;
+		rowSizeBytes = (size_t) ceil(numSnps / 4.0);
+	} else{
+        munmap(genoMemStart, genoMemLength);
+		fprintf(stderr, "Invalid file type. Exiting!\n");
+		return;
+	}
+    genos = (unsigned char*) genoMemStart + headerSize;
+
+
     // Now, we parse each site.
-    while (!ks_eof(snpStream)) {
+    gzFile snp = gzopen(snpFile, "r");
+    kstream_t* snpStream = ks_init(snp);
+    kstring_t* snpBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
+    int numSnpsSnps = 0;
+    while (true) {
         ks_getuntil(snpStream, '\n', snpBuffer, 0);
+        if (ks_eof(snpStream) || numSnpsSnps > numSnps)
+            break;
         // Get all info of the SNP.
         char* snpLine = strdup(snpBuffer -> s);
         char* token = strtok(snpLine, " \t\n");
@@ -64,99 +131,42 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
         char* alt = strdup(token);
 
         // Print the site information.
-        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s\n", chrom, id, position, ref, alt);
+        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s.\t.\t.\tGT", chrom, id, position, ref, alt);
         free(snpLine); free(id); free(chrom); free(position); free(ref); free(alt);
+
+        // Print each sample's genotype.
+        size_t byteIndex; 
+        int bitShift;
+        for (int i = 0; i < numSamples; i++) {
+            if (!transpose) {
+                byteIndex = i / 4; 
+                bitShift = 6 - (i % 4) * 2;
+                byteIndex += (rowSizeBytes * numSnpsSnps);
+            } else {
+                byteIndex = numSnpsSnps / 4; 
+                bitShift = 6 - (numSnpsSnps % 4) * 2;
+                byteIndex += (rowSizeBytes * i);
+            }
+            unsigned char genoByte = genos[byteIndex];
+            switch (((genoByte >> bitShift) & 0x3)) {
+                case 0: gzprintf(fpOut, "\t0/0"); break;
+                case 1: gzprintf(fpOut, "\t0/1"); break;
+                case 2: gzprintf(fpOut, "\t1/1"); break;
+                case 3: gzprintf(fpOut, "\t./."); break;
+            }
+
+        }
+        gzprintf(fpOut, "\n");
+        numSnpsSnps++;
     }
 
-    free(genoBuffer -> s); free(genoBuffer);
+    if (numSnpsSnps != numSnps)
+        fprintf(stderr, "Unequal number of snps between geno and snp files. Exiting!\n");
+
+    munmap(genoMemStart, genoMemLength);
     free(snpBuffer -> s); free(snpBuffer);
-    free(indBuffer -> s); free(indBuffer);
-    ks_destroy(genoStream);
-    ks_destroy(snpStream);
-    ks_destroy(indStream);
-    gzclose(geno);
+    ks_destroy(snpStream); 
     gzclose(snp);
-    gzclose(ind);
-}
-
-// Convert eigen/ancestry map format to VCF file.
-void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOut) {
-    FILE* geno = fopen(genoFile, "r");
-    FILE* snp = fopen(snpFile, "r");
-    FILE* ind = fopen(indFile, "r");
-    char* line = calloc(MAX_LINE_LENGTH, sizeof(char));
-
-    // Print the VCF header information.
-    gzprintf(fpOut, "##fileformat=VCFv4.2\n");
-    gzprintf(fpOut, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n");
-    gzprintf(fpOut, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");   
-    // Print the sample names in the header.
-    while (fgets(line, MAX_LINE_LENGTH, ind)) {
-        int endIndex = -1;
-        int startIndex = -1;
-        for (int i = 0; i < strlen(line); i++) {
-            if (line[i] != ' ') {
-                startIndex = i;
-                break;
-            }
-        }
-        for (int i = 0; i < strlen(line) - 3; i++) {
-            if (line[i] == ' ' && line[i+1] == 'M' && line[i+2] == ' ') {
-                endIndex = i;
-                break;
-            }
-            if (line[i] == ' ' && line[i+1] == 'F' && line[i+2] == ' ') {
-                endIndex = i;
-                break;
-            }
-            if (line[i] == ' ' && line[i+1] == 'U' && line[i+2] == ' ') {
-                endIndex = i;
-                break;
-            }
-            if (line[i] == '\t' && line[i+1] == 'M' && line[i+2] == '\t') {
-                endIndex = i;
-                break;
-            }
-            if (line[i] == '\t' && line[i+1] == 'F' && line[i+2] == '\t') {
-                endIndex = i;
-                break;
-            }
-            if (line[i] == '\t' && line[i+1] == 'U' && line[i+2] == '\t') {
-                endIndex = i;
-                break;
-            }
-        }
-        char* sampleName = strndup(line + startIndex, (endIndex - startIndex + 1));
-        gzprintf(fpOut, "\t%s", sampleName);
-        free(sampleName);
-    }
-    gzprintf(fpOut, "\n");
-    
-    // Now, we parse each site.
-    while (fgets(line, MAX_LINE_LENGTH, snp)) {
-        // Get all info of the SNP.
-        char* snpLine = strdup(line);
-        char* token = strtok(snpLine, " \t\n");
-        char* id = strdup(token); 
-        token = strtok(NULL, " \t\n");
-        char* chrom = strdup(token);
-        token = strtok(NULL, " \t\n");
-        token = strtok(NULL, " \t\n");
-        char* position = strdup(token);
-        token = strtok(NULL, " \t\n");
-        char* ref = strdup(token);
-        token = strtok(NULL, " \t\n");
-        char* alt = strdup(token);
-
-        // Print the site information.
-        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s\n", chrom, id, position, ref, alt);
-        free(snpLine); free(id); free(chrom); free(position); free(ref); free(alt);
-    }
-
-    free(line);
-    fclose(geno);
-    fclose(snp);
-    fclose(ind);
 }
 
 void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) {
