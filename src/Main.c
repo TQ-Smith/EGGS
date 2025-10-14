@@ -131,7 +131,7 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
         char* alt = strdup(token);
 
         // Print the site information.
-        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s\t.\t.\t.\tGT", chrom, id, position, ref, alt);
+        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s\t.\t.\t.\tGT", chrom, position, id, ref, alt);
         free(snpLine); free(id); free(chrom); free(position); free(ref); free(alt);
 
         // Print each sample's genotype.
