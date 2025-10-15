@@ -45,6 +45,7 @@ void print_help() {
     fprintf(stderr, "                                        If a genotype is missing, then the ancestral is used. If multiallelic VCF site,\n");
     fprintf(stderr, "                                        then any alternative alleles are treated as derived.\n");
     fprintf(stderr, "    -v,--verbose                    Print summary statistics for missingness at the individual and locus level.\n");
+    fprintf(stderr, "                                        With -o, produce .ind.tsv and .loci.tsv files.\n");
     fprintf(stderr, "                                        Ignore other options. Only used with VCF input.\n");
     fprintf(stderr, "\n");
 }
