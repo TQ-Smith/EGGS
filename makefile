@@ -50,4 +50,4 @@ lib/gsl:
 
 .PHONY: clean
 clean:
-	rm lib/*.o src/*.o lib/gsl/*.o bin/eggs
+	rm lib/*.o src/*.o lib/gsl/*.o
