@@ -32,7 +32,7 @@ void print_help() {
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     fprintf(stderr, "    -m,--mask       VCF             Filename to use as mask for missing genotypes.\n");
     fprintf(stderr, "    -b,--beta       VCF/STR         Calculate mu/sigma of missingness per site from VCF or supply as\n");
-    fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta dsitribution for missingness.\n");
+    fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta distribution for missingness.\n");
     fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from file and uses that\n");
     fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
     fprintf(stderr, "    -d,--deamin     STR             Two comma-seperated proportions \"prob1,prob2\" where prob1 is the probability\n");
