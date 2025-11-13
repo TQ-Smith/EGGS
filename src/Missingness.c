@@ -43,7 +43,7 @@ MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputSt
     record -> numSamples = replicate -> numSamples;
     
     int numRecords = 0;
-    while (get_next_vcf_record(record, inputStream)) {
+    while (get_next_vcf_record(record, inputStream, false)) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++)
             if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)

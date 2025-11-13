@@ -43,12 +43,6 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
     // Allocate our replicate.
     Replicate_t* replicate = (Replicate_t*) calloc(1, sizeof(Replicate_t));
 
-    // Eat meta info lines until line starting with #CHROM.
-    int dret;
-    do {
-        ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, &dret);
-    } while (strncmp(inputStream -> buffer -> s, "#C", 2) != 0);
-
     // Count the number of samples in the VCF file.
     int numSamples = 0;
     for (int i = 0; i < inputStream -> buffer -> l; i++)
@@ -72,7 +66,7 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
     return replicate;
 }
 
-bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream) {
+bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep) {
 
     int dret = 0, numTabs = 0, prevIndex = 0, numAlleles = 2;
 
@@ -102,6 +96,8 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream) {
                 for (int j = prevIndex + 1; inputStream -> buffer -> s[j] != '\t'; j++)
                     if (inputStream -> buffer -> s[j] == ',')
                         numAlleles++;
+            } else if (numTabs == 7 && keep) {
+                record -> info = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
             } else if (numTabs > 8) {
                 record -> genotypes[numTabs - 9].left = MISSING;
                 record -> genotypes[numTabs - 9].right = MISSING;
@@ -126,7 +122,7 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream) {
 
 }
 
-void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream) {
+void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream, bool keep) {
     int recordIndex = 0;
     while (true) {
 
@@ -137,7 +133,7 @@ void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream) {
         record -> recordIndex = recordIndex;
 
         // While not EOF, add record to the list.
-        if (get_next_vcf_record(record, inputStream)) {
+        if (get_next_vcf_record(record, inputStream, keep)) {
             if (replicate -> numRecords == 0) {
                 replicate -> headRecord = record;
                 replicate -> tailRecord = record;
@@ -265,6 +261,8 @@ void destroy_record(Record_t* record) {
         free(record -> ref);
     if (record -> alts != NULL)
         free(record -> alts);
+    if (record -> info != NULL)
+        free(record -> info);
     free(record);
 }
 

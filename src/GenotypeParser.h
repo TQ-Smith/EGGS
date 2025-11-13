@@ -39,6 +39,8 @@ typedef struct Record {
     char* ref;
     // The alternative alleles. Seperated by ',' is multiple.
     char* alts;
+    // If INFO Column is given.
+    char* info;
     // The total number of alleles at the locus.
     int numAlleles;
     // Redunant but useful. The number of samples in the genotypes array.
@@ -93,15 +95,17 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream);
 // Accepts:
 //  Record_t* record -> An allocated record. Set fields.
 //  InputStream_t* inputStream -> The VCF file we are reading.
+//  bool keep -> If we are keeping the info field.
 // Returns: bool, true is a record was read. false, if eof.
-bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream);
+bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep);
 
 // Reads in whole VCF file and adds each record to replicate.
 // Accepts:
 //  Replicate_t* replicate -> An allocated, but empty, replicate to add records to.
 //  InputStream_t* inputStream -> The VCF file we are reading from.
+//  bool keep -> Keep info tags.
 // Returns: void.
-void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream);
+void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream, bool keep);
 
 // Reads in a ms replicate from input stream and returns replicate.
 // Accepts:

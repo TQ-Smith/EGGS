@@ -47,6 +47,7 @@ void print_help() {
     fprintf(stderr, "    -v,--verbose                    Print summary statistics for missingness at the individual and locus level.\n");
     fprintf(stderr, "                                        With -o, produce .ind.tsv and .loci.tsv files.\n");
     fprintf(stderr, "                                        Ignore other options. Only used with VCF input.\n");
+    fprintf(stderr, "    -k,--keep                       Keep INFO tags in header and in VCF records.\n");
     fprintf(stderr, "\n");
 }
 
@@ -66,6 +67,7 @@ static ko_longopt_t long_options[] = {
     {"deamin",          ko_required_argument,   'b'},
     {"ms",              ko_no_argument,         'x'},
     {"verbose",         ko_no_argument,         'v'},
+    {"keep",            ko_no_argument,         'k'},
     {0, 0, 0}
 };
 
@@ -157,7 +159,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "hxaupsvo:m:r:l:b:d:e:";
+    const char *opt_str = "khxaupsvo:m:r:l:b:d:e:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -189,6 +191,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> probTransition = 0;
     eggsConfig -> msOutput = false;
     eggsConfig -> verbose = false;
+    eggsConfig -> keep = false;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
@@ -207,6 +210,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'a': eggsConfig -> hap = true; break;
             case 'd': eggsConfig -> deamin = strdup(options.arg); break;
             case 'x': eggsConfig -> msOutput = true; break;
+            case 'k': eggsConfig -> keep = true; break;
             case 'v': eggsConfig -> verbose = true; break;
         }
 	}

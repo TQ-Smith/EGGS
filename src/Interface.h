@@ -49,6 +49,8 @@ typedef struct {
     char* eigenFiles;
     // The EGGS command the user ran.
     char* command;
+    // Keep INFO tags in VCF.
+    bool keep;
 } EggsConfig_t;
 
 // Accepts the command line arguments and sets configuration parameters.

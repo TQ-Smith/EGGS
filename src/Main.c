@@ -193,7 +193,7 @@ void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) 
     // Print loci file.
     fprintf(lociOut, "CHROM\tPOS\tPROP_MISSING\n");
     int numRecords = 0;
-    while (get_next_vcf_record(record, inputStream)) {
+    while (get_next_vcf_record(record, inputStream, false)) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++) {
             if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING) {
@@ -220,7 +220,6 @@ void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) 
 
 // Print a simple VCF header from a replicate.
 void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile fpOut) {
-    gzprintf(fpOut, "##fileformat=VCFv4.2\n");
     gzprintf(fpOut, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">\n"); 
     // If -r was used, explicitly print values.
     if (eggsConfig -> betaMissing != NULL)
@@ -269,7 +268,10 @@ void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile 
         gzprintf(fpOut, "\t%s", record -> alts);
 
     // Empty fields.
-    gzprintf(fpOut, "\t.\t.\t.\tGT");
+    if (eggsConfig -> keep)
+        gzprintf(fpOut, "\t.\t.\t%s\tGT", record -> info);
+    else
+        gzprintf(fpOut, "\t.\t.\t.\tGT");
 
     // Now, we print the genotypes.
 
@@ -592,8 +594,18 @@ int main(int argc, char* argv[]) {
             fpOut = gzdopen(fileno(stdout), "w");
         }
 
+        // Eat meta info lines until line starting with #CHROM.
+        gzprintf(fpOut, "##fileformat=VCFv4.2\n");
+        int dret;
+        do {
+            ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, &dret);
+            // Echo info tag if flag set.
+            if (eggsConfig -> keep && strncmp(inputStream -> buffer -> s, "##INFO", 6) == 0)
+                gzprintf(fpOut, "%s\n", inputStream -> buffer -> s);
+        } while (strncmp(inputStream -> buffer -> s, "#C", 2) != 0);
+
         Replicate_t* replicate = init_vcf_replicate(inputStream);
-        parse_vcf(replicate, inputStream);
+        parse_vcf(replicate, inputStream, eggsConfig -> keep);
         print_vcf_header(replicate, eggsConfig, fpOut);
         print_replicate(replicate, mask, eggsConfig, fpOut);
         destroy_replicate(replicate);
