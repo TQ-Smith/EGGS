@@ -599,6 +599,9 @@ int main(int argc, char* argv[]) {
         int dret;
         do {
             ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, &dret);
+            // Echo the contig info.
+            if (strncmp(inputStream -> buffer -> s, "##CONTIG", 8) == 0)
+                gzprintf(fpOut, "%s\n", inputStream -> buffer -> s);
             // Echo info tag if flag set.
             if (eggsConfig -> keep && strncmp(inputStream -> buffer -> s, "##INFO", 6) == 0)
                 gzprintf(fpOut, "%s\n", inputStream -> buffer -> s);
