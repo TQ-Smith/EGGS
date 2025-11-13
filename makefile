@@ -17,11 +17,11 @@ bin/eggs: lib src
 .PHONY: src
 src: src/Main.o
 
-src/Main.o: src/Interace.o src/GenotypeParser.o src/Missingness.o
+src/Main.o: src/Interface.o src/GenotypeParser.o src/Missingness.o
 	$(CC) $(CFLAGS) src/Main.c -o src/Main.o
 
-src/Interace.o:
-	$(CC) $(CFLAGS) src/Interface.c -o src/Interace.o
+src/Interface.o:
+	$(CC) $(CFLAGS) src/Interface.c -o src/Interface.o
 
 src/GenotypeParser.o:
 	$(CC) $(CFLAGS) src/GenotypeParser.c -o src/GenotypeParser.o
@@ -50,4 +50,4 @@ lib/gsl:
 
 .PHONY: clean
 clean:
-	rm lib/*.o src/*.o lib/gsl/*.o
+	rm lib/*.o src/*.o lib/gsl/*.o bin/*.o

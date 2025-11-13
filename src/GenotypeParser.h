@@ -88,8 +88,9 @@ void destroy_input_stream(InputStream_t* inputStream);
 // From an input stream reading a VCF file, create an empty replicate.
 // Accepts:
 //  InputStream_t* inputStream -> The input stream to read from.
+//  bool eat -> If we should eat the header lines.
 // Returns: Replicate_t*, an empty replicate with sampleNames set from VCF header info.
-Replicate_t* init_vcf_replicate(InputStream_t* inputStream);
+Replicate_t* init_vcf_replicate(InputStream_t* inputStream, bool eat);
 
 // Read in next VCF record from input stream.
 // Accepts:

@@ -32,7 +32,7 @@ MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputSt
         return NULL;
     if (replicate -> numSamples == 0)
         return NULL;
-
+    
     MissingDistribution_t* dis = calloc(1, sizeof(MissingDistribution_t));
 
     kvec_t(double) proportions;

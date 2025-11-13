@@ -36,12 +36,20 @@ void destroy_input_stream(InputStream_t* inputStream) {
     free(inputStream);
 }
 
-Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
+Replicate_t* init_vcf_replicate(InputStream_t* inputStream, bool eat) {
     if (inputStream == NULL)
         return NULL;
 
     // Allocate our replicate.
     Replicate_t* replicate = (Replicate_t*) calloc(1, sizeof(Replicate_t));
+
+    // If we have header lines to eat.
+    if (eat) {
+        int dret;
+        do {
+            ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, &dret);
+        } while (strncmp(inputStream -> buffer -> s, "#C", 2) != 0);
+    }
 
     // Count the number of samples in the VCF file.
     int numSamples = 0;
@@ -49,7 +57,6 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
         if (inputStream -> buffer -> s[i] == '\t')
             numSamples++;
     replicate -> numSamples = numSamples - 8;
-
     // Copy the sample names from the header line.
     replicate -> sampleNames = calloc(replicate -> numSamples, sizeof(char*));
     // Read in the sample names.
@@ -62,7 +69,7 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream) {
         replicate -> sampleNames[i] = strdup(tok);
         tok = strtok(NULL, "\t");
     }
-
+    
     return replicate;
 }
 

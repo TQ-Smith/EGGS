@@ -458,8 +458,8 @@ void print_replicate(Replicate_t* replicate, MissingDistribution_t* mask, EggsCo
 void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
 
     // Read the VCF file.
-    Replicate_t* replicate = init_vcf_replicate(inputStream);
-
+    Replicate_t* replicate = init_vcf_replicate(inputStream, true);
+    
     MissingDistribution_t* dis = init_missing_distribution(replicate, inputStream);
     
     // Calculate and set mean.
@@ -530,7 +530,7 @@ int main(int argc, char* argv[]) {
 
     // Replicate counter for ms-style replicates.
     int numReps = 1;
-
+    
     // Read first line from stdin to determine if it is a VCF file or ms-style input.
     ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, 0);
     
@@ -540,20 +540,20 @@ int main(int argc, char* argv[]) {
         destroy_eggs_configuration(eggsConfig);
         return -1;
     }
-
+    
     // Read in distribution if supplied.
     MissingDistribution_t* mask = NULL;
     InputStream_t* maskInput = NULL;
     Replicate_t* missingReplicate = NULL;
     if (eggsConfig -> maskFile != NULL) {
         maskInput = init_input_stream(eggsConfig -> maskFile);
-        missingReplicate = init_vcf_replicate(maskInput);
+        missingReplicate = init_vcf_replicate(maskInput, true);
         mask = init_missing_distribution(missingReplicate, maskInput);
         destroy_input_stream(maskInput);
         destroy_replicate(missingReplicate);
     } else if (eggsConfig -> randomMissing != NULL) {
         maskInput = init_input_stream(eggsConfig -> randomMissing);
-        missingReplicate = init_vcf_replicate(maskInput);
+        missingReplicate = init_vcf_replicate(maskInput, true);
         mask = init_missing_distribution(missingReplicate, maskInput);
         destroy_input_stream(maskInput);
         destroy_replicate(missingReplicate);
@@ -566,13 +566,13 @@ int main(int argc, char* argv[]) {
         gsl_rng_set(r, time(NULL));
         mask -> r = r;
     }
-
+    
     // If VCF.
     if (strncmp(inputStream -> buffer -> s, "##fileformat=VCF", 16) == 0) {
 
         // If verbose summary statistics only.
         if (eggsConfig -> verbose) {
-            Replicate_t* replicate = init_vcf_replicate(inputStream);
+            Replicate_t* replicate = init_vcf_replicate(inputStream, true);
             summary(replicate, inputStream, eggsConfig -> outFile);
             destroy_replicate(replicate);
             destroy_input_stream(inputStream);
@@ -607,7 +607,7 @@ int main(int argc, char* argv[]) {
                 gzprintf(fpOut, "%s\n", inputStream -> buffer -> s);
         } while (strncmp(inputStream -> buffer -> s, "#C", 2) != 0);
 
-        Replicate_t* replicate = init_vcf_replicate(inputStream);
+        Replicate_t* replicate = init_vcf_replicate(inputStream, false);
         parse_vcf(replicate, inputStream, eggsConfig -> keep);
         print_vcf_header(replicate, eggsConfig, fpOut);
         print_replicate(replicate, mask, eggsConfig, fpOut);
