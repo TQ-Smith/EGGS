@@ -29,6 +29,8 @@ void print_help() {
     fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
     fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
+    fprintf(stderr, "    -g,--seqerr     DOUBLE          Simulate next-generation sequencing error. For biallelic sites, switch allele\n");
+    fprintf(stderr, "                                         to other allele with probability DOUBLE. Ignored when -d or -s is used.\n");
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     fprintf(stderr, "    -m,--mask       VCF             Filename to use as mask for missing genotypes.\n");
     fprintf(stderr, "    -b,--beta       VCF/STR         Calculate mu/sigma of missingness per site from VCF or supply as\n");
@@ -68,6 +70,7 @@ static ko_longopt_t long_options[] = {
     {"ms",              ko_no_argument,         'x'},
     {"verbose",         ko_no_argument,         'v'},
     {"keep",            ko_no_argument,         'k'},
+    {"seqerr",          ko_required_argument,   'g'},
     {0, 0, 0}
 };
 
@@ -115,6 +118,11 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         fprintf(stderr, "Cannot use -x and -a together. Exiting!\n");
         return -1;
     }
+    // Cannot use negative sequencing error.
+    if (eggsConfig -> seqerr < 0 && eggsConfig -> seqerr >= 1) {
+        fprintf(stderr, "-g must be positive real number less than 1. Exiting!\n");
+        return -1;
+    }
     // If beta was given and files does not exists, then parse values directly.
     if (eggsConfig -> betaMissing != NULL && access(eggsConfig -> betaMissing, F_OK) != 0) {
         char* meanstd = strdup(eggsConfig -> betaMissing);
@@ -159,7 +167,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "khxaupsvo:m:r:l:b:d:e:";
+    const char *opt_str = "khxaupsvo:m:r:l:b:d:e:g:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -178,6 +186,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> unphase = false;
     eggsConfig -> unpolarize = false;
     eggsConfig -> pseudohap = false;
+    eggsConfig -> seqerr = 0;
     eggsConfig -> outFile = NULL;
     eggsConfig -> maskFile = NULL;
     eggsConfig -> betaMissing = NULL;
@@ -202,6 +211,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'u': eggsConfig -> unphase = true; break;
             case 'p': eggsConfig -> unpolarize = true; break;
             case 's': eggsConfig -> pseudohap = true; break;
+            case 'g': eggsConfig -> seqerr = (double) strtod(options.arg, (char**) NULL); break;
             case 'o': eggsConfig -> outFile = strdup(options.arg); break;
             case 'm': eggsConfig -> maskFile = strdup(options.arg); break;
             case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;

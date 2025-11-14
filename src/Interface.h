@@ -22,6 +22,8 @@ typedef struct {
     bool unpolarize;
     // If records should be made into pseudohaps.
     bool pseudohap;
+    // Next generation sequencing error.
+    double seqerr;
     // The out file basename.
     char* outFile;
     // The mask file name.

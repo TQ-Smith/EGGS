@@ -324,6 +324,14 @@ void print_record(Record_t* record, int* mask, EggsConfig_t* eggsConfig, gzFile 
                     record -> genotypes[i].left = record -> genotypes[i].right;
             }
 
+            // If sequencing error.
+            if (!eggsConfig -> pseudohap && eggsConfig -> probTransition == 0 && record -> numAlleles == 2 && eggsConfig -> seqerr > 0) {
+                if (record -> genotypes[i].left != MISSING && rand() < eggsConfig -> seqerr)
+                    record -> genotypes[i].left ^= 1;
+                if (record -> genotypes[i].right != MISSING && rand() < eggsConfig -> seqerr)
+                    record -> genotypes[i].right ^= 1;
+            }
+
         }
 
         // Print out sample's genotype.
