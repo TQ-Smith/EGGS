@@ -30,8 +30,6 @@ typedef struct {
     char* maskFile;
     // The string defining the VCF or mean and std. dev. for beta distribution.
     char* betaMissing;
-    // The VCF file for to calculate the distribution of missing genotypes.
-    char* randomMissing;
     // The mean and std err for random missing genotypes.
     double meanMissing;
     double stdMissing;

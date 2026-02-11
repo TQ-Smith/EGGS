@@ -5,46 +5,52 @@
 // Principal Investigator: Dr. Zachary A. Szpiech
 // Purpose: Mask out genotypes in replicates.
 
-// NOTE: I am iterating through the sample-by-record matrix a few more
-//  times than I should. I keep it in an unoptimized form for now
-//  to keep it straightforward.
-
 #ifndef MISSINGNESS_H
 #define MISSINGNESS_H
 
 #include "GenotypeParser.h"
+#include "kvec.h"
+#include "compact_bitset.h"
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 
-// The proportion of missing samples at each site.
+// Our mask structure.
 typedef struct {
-    double* proportions;
+    // For each record, set bit if sample is missing.
+    kvec_t(CompactBitset*) mask;
+    // Number of samples/records in the VCF.
+    int numSamples;
     int numRecords;
+    // numRecords - 1 array. Holds the probability the sample is 
+    //  missing given that the sample was missing at the previous record.
+    double* conditional;
     gsl_rng* r;
-    int* permu;
-    int sizeOfPermu;
-} MissingDistribution_t;
+    // Holds previous block's missing state.
+    CompactBitset* prev;   
+    // Holds by sample prob of missing.
+    double* blockMissing;
+} MissingMask_t;
 
-// Calculate the proportion of missing samples at each site.
+// Fisher-Yates shuffle algorithm for an integer array.
+void shuffle_real_array(gsl_rng* r, int* array, int n);
+
+// Create our mask.
 // Accepts:
-//  Recplicate_t* replicate -> A replicate. Only header is read.
+//  Replicate_t* replicate -> A replicate. Only header is read.
 //  InputStream_t* inputStream -> The input stream to the VCF.
-// Returns: MissingDistribution_t*, the proportion of samples missing at each site.
-MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputStream_t* inputStream);
+// Returns: MissingMask_t*, sets bit for sample if missing at each site.
+MissingMask_t* init_missing_mask(Replicate_t* replicate, InputStream_t* inputStream);
 
-// Create a mask for a locus.
+// Get the mask for the current site.
 // Accepts:
-//  MissingDistribution_t* dis -> The distribution used for random/EGGS mask algorithm.
-//  int numSamples -> The number of samples at the locus.
-//  int curRecord -> Used for EGGS mask algorithm. The current record the mask will be applied to.
-//  int numRecords -> The total number of records.
-//  double mean -> If beta distribution, then the mean.
-//  double stder -> If beta distribution, then the stder.
-//  int* mask -> Array of size numSamples. Element set to 1 if the sample is missing.
-// Returns: void.
-void create_random_mask(MissingDistribution_t* dis, int numSamples, int curRecord, int numRecords, double mean, double stder, int* mask);
+//  MissingMask_t* mask -> Our mask to replicate.
+//  CompactBitset* cb -> Sets bit for samples to mark as missing in current record.
+//  int numRecords -> numRecords for the target.
+//  int numSaamples -> numSamples for the target.
+//  int site -> The current record.
+void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecords, int numSamples, int site);
 
-// Free the distribution structure.
-void destroy_missing_distribution(MissingDistribution_t* dis);
+// Free the mask structure.
+void destroy_missing_mask(MissingMask_t* mask);
 
 #endif

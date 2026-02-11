@@ -33,10 +33,9 @@ void print_help() {
     fprintf(stderr, "                                         to other allele with probability DOUBLE. Ignored when -d or -s is used.\n");
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
     fprintf(stderr, "    -m,--mask       VCF             Filename to use as mask for missing genotypes.\n");
+    fprintf(stderr, "                                         Number of records must be greater than input.\n");
     fprintf(stderr, "    -b,--beta       VCF/STR         Calculate mu/sigma of missingness per site from VCF or supply as\n");
     fprintf(stderr, "                                        values as \"mu,sigma\". Defines beta distribution for missingness.\n");
-    fprintf(stderr, "    -r,--random     VCF             Calculates proportion of missing samples per site from file and uses that\n");
-    fprintf(stderr, "                                        distribution to randomly introduce missing genotypes.\n");
     fprintf(stderr, "    -d,--deamin     STR             Two comma-seperated proportions \"prob1,prob2\" where prob1 is the probability\n");
     fprintf(stderr, "                                        the site is a transition and prob2 is the probability of deamination.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segment in base-pairs.\n");
@@ -63,7 +62,6 @@ static ko_longopt_t long_options[] = {
     {"out",             ko_required_argument,   'o'},
     {"mask",            ko_required_argument,   'm'},
     {"beta",            ko_required_argument,   'b'},
-    {"random",          ko_required_argument,   'r'},
     {"length",          ko_required_argument,   'l'},
     {"hap",             ko_no_argument,         'a'},
     {"deamin",          ko_required_argument,   'b'},
@@ -89,9 +87,9 @@ bool doesExist(char* fileNames) {
 // Returns: 0, if valid. -1, if invalid.
 int check_configuration(EggsConfig_t* eggsConfig) {
     // Cannot use mask, beta, or random genotypes together.
-    int numSet = (int) (eggsConfig -> randomMissing != NULL) + (int) (eggsConfig -> maskFile != NULL) + (int) (eggsConfig -> betaMissing != NULL) + (int) (eggsConfig -> msOutput);
+    int numSet = (int) (eggsConfig -> maskFile != NULL) + (int) (eggsConfig -> betaMissing != NULL) + (int) (eggsConfig -> msOutput);
     if (numSet > 1) {
-        fprintf(stderr, "Cannot use -m, -b, -r, or -x options together. Exiting!\n");
+        fprintf(stderr, "Cannot use -m, -b, or -x options together. Exiting!\n");
         return -1;
     }
     if (numSet > 1 && eggsConfig -> verbose) {
@@ -106,11 +104,6 @@ int check_configuration(EggsConfig_t* eggsConfig) {
     // If mask files given, make sure it exists.
     if (eggsConfig -> maskFile != NULL && access(eggsConfig -> maskFile, F_OK) != 0) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
-        return -1;
-    }
-    // If beta files given, make sure it exists.
-    if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) != 0) {
-        fprintf(stderr, "-r %s does not exist. Exiting!\n", eggsConfig -> randomMissing);
         return -1;
     }
     // Cannot use -a and -x options together.
@@ -190,7 +183,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> outFile = NULL;
     eggsConfig -> maskFile = NULL;
     eggsConfig -> betaMissing = NULL;
-    eggsConfig -> randomMissing = NULL;
     eggsConfig -> meanMissing = -1;
     eggsConfig -> stdMissing = -1;
     eggsConfig -> length = -1;
@@ -214,7 +206,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
             case 'g': eggsConfig -> seqerr = (double) strtod(options.arg, (char**) NULL); break;
             case 'o': eggsConfig -> outFile = strdup(options.arg); break;
             case 'm': eggsConfig -> maskFile = strdup(options.arg); break;
-            case 'r': eggsConfig -> randomMissing = strdup(options.arg); break;
             case 'b': eggsConfig -> betaMissing = strdup(options.arg); break;
             case 'l': eggsConfig -> length = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'a': eggsConfig -> hap = true; break;
@@ -248,8 +239,6 @@ void destroy_eggs_configuration(EggsConfig_t* eggsConfig) {
         free(eggsConfig -> outFile);
     if (eggsConfig -> maskFile != NULL)
         free(eggsConfig -> maskFile);
-    if (eggsConfig -> randomMissing != NULL)
-        free(eggsConfig -> randomMissing);
     if (eggsConfig -> betaMissing != NULL)
         free(eggsConfig -> betaMissing);
     if (eggsConfig -> command != NULL)

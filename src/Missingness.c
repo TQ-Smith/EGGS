@@ -6,7 +6,6 @@
 // Purpose: Mask out genotypes in replicates.
 
 #include "Missingness.h"
-#include "kvec.h"
 #include <time.h>
 #include <math.h>
 
@@ -14,7 +13,6 @@ double uniform(gsl_rng* r, double min, double max) {
     return min + (max - min) * (double) gsl_rng_uniform(r);
 }
 
-// Fisher-Yates shuffle algorithm for an integer array.
 void shuffle_real_array(gsl_rng* r, int* array, int n) {
     int temp = 0, j = 0;
     for (int i = n - 1; i > 0; i--) {
@@ -25,7 +23,7 @@ void shuffle_real_array(gsl_rng* r, int* array, int n) {
     }
 }
 
-MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputStream_t* inputStream) {
+MissingMask_t* init_missing_mask(Replicate_t* replicate, InputStream_t* inputStream) {
     if (replicate == NULL)
         return NULL;
     if (inputStream == NULL)
@@ -33,110 +31,91 @@ MissingDistribution_t* init_missing_distribution(Replicate_t* replicate, InputSt
     if (replicate -> numSamples == 0)
         return NULL;
     
-    MissingDistribution_t* dis = calloc(1, sizeof(MissingDistribution_t));
-
-    kvec_t(double) proportions;
-    kv_init(proportions);
+    MissingMask_t* mask = calloc(1, sizeof(MissingMask_t));
+    mask -> numSamples = replicate -> numSamples;
+    mask -> blockMissing = calloc(numSamples, sizeof(double));
+    kv_init(mask -> mask);
 
     Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
     record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
     record -> numSamples = replicate -> numSamples;
-    
-    int numRecords = 0;
+
+    // Read in each record and set bit corresponding to sample if missing.
     while (get_next_vcf_record(record, inputStream, false)) {
-        int numMissing = 0;
+        CompactBitset* cb = cb_create(replicate -> numSamples);
         for (int i = 0; i < replicate -> numSamples; i++)
             if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)
-                numMissing++;
-        kv_push(double, proportions, numMissing / (double) record -> numSamples);
-        numRecords++;
+                cb_set_bit(cb, i);
+        kv_push(CompactBitset*, mask -> mask, cb);
+        mask -> numRecords++;
     }
-
-    dis -> proportions = (double*) calloc(numRecords, sizeof(double));
-    dis -> numRecords = numRecords;
-    for (int i = 0; i < numRecords; i++) 
-        dis -> proportions[i] = kv_A(proportions, i);
-
     destroy_record(record);
-    kv_destroy(proportions);
 
     // Create RNG.
     gsl_rng_env_setup();
     const gsl_rng_type* T = gsl_rng_default;
     gsl_rng* r = gsl_rng_alloc(T);
     gsl_rng_set(r, time(NULL));
-    dis -> r = r;
-
-    dis -> permu = NULL;
+    mask -> r = r;
     
-    return dis;
+    return mask;
 }
 
+void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecords, int numSamples, int site) {
+    int lower = (int) (site * (mask -> numRecords / (double) numRecords));
+    int upper;
+    if (site == numRecords - 1) 
+        upper = numRecords - 1;
+    else 
+        upper = (int) ((site + 1) * (mask -> numRecords / (double) numRecords)) - 1;
+    int size = (upper - lower) + 1;
 
-void create_random_mask(MissingDistribution_t* dis, int numSamples, int curRecord, int numRecords, double mean, double stder, int* mask) {
-
-    // If the shuffle array has not been created, then allocate array.
-    if (dis -> permu == NULL) {
-        dis -> permu = calloc(numSamples, sizeof(int));
-        dis -> sizeOfPermu = numSamples;
-        for (int i = 0; i < numSamples; i++)
-            dis -> permu[i] = i;
-    } else if (dis -> sizeOfPermu != numSamples) {
-        free(dis -> permu);
-        dis -> permu = calloc(numSamples, sizeof(int));
-        dis -> sizeOfPermu = numSamples;
-        for (int i = 0; i < numSamples; i++)
-            dis -> permu[i] = i;
-    }
-
-    // Compute our number of missing samples.
-    int numMissing;
-    // Use beta-distribution.
-    if (mean != -1 && stder != -1) {
-        double alpha = (mean * mean * (1 - mean)) / (stder * stder) - mean;
-        double beta = (alpha / mean) * (1 - mean);
-        numMissing = (int) (numSamples * gsl_ran_beta(dis -> r, alpha, beta));
-    // Pick randomly.
-    } else if (curRecord == 0) {
-        numMissing = (int) (numSamples * dis -> proportions[(int) (dis -> numRecords * gsl_rng_uniform(dis -> r))]);
-    // Use EGGS method.
-    } else {
-        if (numRecords < dis -> numRecords) {
-            int chunkSize = (int) ceil(dis -> numRecords / (double) numRecords);
-            int chunkStart = chunkSize * (curRecord / chunkSize);
-            if (chunkStart + chunkSize > dis -> numRecords) 
-                numMissing = (int) (numSamples * dis -> proportions[chunkStart + gsl_rng_uniform_int(dis -> r, dis -> numRecords - chunkSize)]);
-            else 
-                numMissing = (int) (numSamples * dis -> proportions[chunkStart + gsl_rng_uniform_int(dis -> r, chunkSize)]);
-        } else if (numRecords == dis -> numRecords) {
-            numMissing = (int) (numSamples * dis -> proportions[curRecord]);
-        } else {
-            int chunkSize = (int) ceil(numRecords / (double) dis -> numRecords);
-            int chunkStart = curRecord / chunkSize;
-            if (chunkStart == dis -> numRecords - 1) 
-                numMissing = (int) (numSamples * uniform(dis -> r, fmin(dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1]), fmax(dis -> proportions[dis -> numRecords - 2], dis -> proportions[dis -> numRecords - 1])));
-            else
-                numMissing = (int) (numSamples * uniform(dis -> r, fmin(dis -> proportions[chunkStart], dis -> proportions[chunkStart + 1]), fmax(dis -> proportions[chunkStart], dis -> proportions[chunkStart + 1])));
+    // Calculate proportion of missing sites for samples within the current block.
+    for (int i = 0; i < mask -> numSamples; i++)
+        mask -> blockMissing[i] = 0;
+    for (int l = lower; l <= upper; l++) {
+        for (int i = 0; i < mask -> numSamples; i++) {
+            CompactBitset* cb = kv_A(mask -> mask, l);
+            if (cb_get_bit(cb, i))
+                mask -> blockMissing[i]++;
         }
     }
+    for (int i = 0; i < mask -> numSamples; i++)
+        mask -> blockMissing[i] /= size;
 
-    // Set numSamples to missing.
-    shuffle_real_array(dis -> r, dis -> permu, numSamples);
-    for (int i = 0; i < numSamples; i++)
-        mask[i] = 0;
-    for (int i = 0; i < numMissing; i++) 
-        mask[dis -> permu[i]] = MISSING;
-
+    // If it is the first site, we randomly choose.
+    if (site == 0) {
+        for (int i = 0; i < numSamples; i++)
+            if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[gsl_rng_uniform_int(mask -> r, 0, mask -> numSamples)])
+                cb_set_bit(cb, i);
+    } else {
+        for (int i = 0; i < numSamples; i++) {
+            // If the previous site is missing, then we set the current site to missing given the conditional probability.
+            if (cb_get_bit(mask -> prev, i)) {
+                if ((double) gsl_rng_uniform(mask -> r) < mask -> conditional[lower - 1])
+                    cb_set_bit(cb, i);
+            // Otherwise, we calculate if its missing given the current block's information.
+            } else if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[gsl_rng_uniform(mask -> r, 0, mask -> numSamples)]) {
+                cb_set_bit(cb, i);
+            }
+        }
+    }
 }
 
-void destroy_missing_distribution(MissingDistribution_t* dis) {
-    if (dis == NULL)
+void destroy_missing_mask(MissingMask_t* mask) {
+    if (mask == NULL)
         return;
-    if (dis -> proportions != NULL)
-        free(dis -> proportions);
-    if (dis -> r != NULL)
-        gsl_rng_free(dis -> r);
-    if (dis -> permu != NULL)
-        free(dis -> permu);
-    free(dis);
+    if (mask -> r != NULL)
+        gsl_rng_free(mask -> r);
+    if (mask -> prev != NULL)
+        cb_destroy(mask -> prev);
+    if (mask -> blockMissing != NULL)
+        free(blockMissing);
+    if (mask -> conditional != NULL) {
+        free(mask -> conditional);
+        for (int i = 0; i < mask -> numRecords; i++)
+            cb_destroy(kv_A(mask -> mask, i));
+        kv_destroy(mask -> mask);
+    }
+    free(mask);
 }
