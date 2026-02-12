@@ -33,7 +33,7 @@ MissingMask_t* init_missing_mask(Replicate_t* replicate, InputStream_t* inputStr
     
     MissingMask_t* mask = calloc(1, sizeof(MissingMask_t));
     mask -> numSamples = replicate -> numSamples;
-    mask -> blockMissing = calloc(numSamples, sizeof(double));
+    mask -> blockMissing = calloc(replicate -> numSamples, sizeof(double));
     kv_init(mask -> mask);
 
     Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
@@ -85,21 +85,49 @@ void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecor
 
     // If it is the first site, we randomly choose.
     if (site == 0) {
-        for (int i = 0; i < numSamples; i++)
-            if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[gsl_rng_uniform_int(mask -> r, 0, mask -> numSamples)])
+        for (int i = 0; i < numSamples; i++) {
+            // Choose a random sample.
+            int randSample = gsl_rng_uniform_int(mask -> r, mask -> numSamples);
+            // With that sample's probability, determine if it should be missing.
+            if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[randSample]) {
+                // Set bit and save the random sample.
                 cb_set_bit(cb, i);
+                mask -> correspondingSample[i] = randSample;
+            } else {
+                // Otherwise no sample was chosen.
+                mask -> correspondingSample[i] = 0;
+            }
+        }
     } else {
         for (int i = 0; i < numSamples; i++) {
-            // If the previous site is missing, then we set the current site to missing given the conditional probability.
-            if (cb_get_bit(mask -> prev, i)) {
-                if ((double) gsl_rng_uniform(mask -> r) < mask -> conditional[lower - 1])
+            // If the previous site was missing.
+            if (mask -> prevCorrespondingSample[i] != 0) {
+                // Use the same sample's probability if the current block should be missing.
+                if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[mask -> prevCorrespondingSample[i]]) {
+                    // Set bit.
                     cb_set_bit(cb, i);
-            // Otherwise, we calculate if its missing given the current block's information.
-            } else if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[gsl_rng_uniform(mask -> r, 0, mask -> numSamples)]) {
-                cb_set_bit(cb, i);
+                    // Keep current sample.
+                    mask -> correspondingSample[i] = mask -> prevCorrespondingSample[i];
+                } else {
+                    mask -> correspondingSample[i] = 0;
+                }
+            // If the previous site was not missing, pick random sample.
+            } else {
+                int randSample = gsl_rng_uniform_int(mask -> r, mask -> numSamples);
+                if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[randSample]) {
+                    cb_set_bit(cb, i);
+                    mask -> correspondingSample[i] = randSample;
+                } else {
+                    mask -> correspondingSample[i] = 0;
+                }
             }
         }
     }
+    // Swap sample tracking.
+    int* temp = mask -> prevCorrespondingSample;
+    mask -> prevCorrespondingSample = mask -> correspondingSample;
+    mask -> correspondingSample = temp;
+
 }
 
 void destroy_missing_mask(MissingMask_t* mask) {
@@ -107,10 +135,12 @@ void destroy_missing_mask(MissingMask_t* mask) {
         return;
     if (mask -> r != NULL)
         gsl_rng_free(mask -> r);
-    if (mask -> prev != NULL)
-        cb_destroy(mask -> prev);
     if (mask -> blockMissing != NULL)
-        free(blockMissing);
+        free(mask -> blockMissing);
+    if (mask -> correspondingSample != NULL)
+        free(mask -> correspondingSample);
+    if (mask -> prevCorrespondingSample != NULL)
+        free(mask -> prevCorrespondingSample);
     if (mask -> conditional != NULL) {
         free(mask -> conditional);
         for (int i = 0; i < mask -> numRecords; i++)

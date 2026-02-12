@@ -449,7 +449,7 @@ void print_replicate(Replicate_t* replicate, MissingMask_t* mask, EggsConfig_t* 
         int* permu = calloc(replicate -> numSamples, sizeof(int));
         for (int i = 0; i < replicate -> numSamples; i++)
             permu[i] = i;
-        mask -> prev = cb_create(replicate -> numSamples);
+        CompactBitset* cb = cb_create(replicate -> numSamples);
 
         Record_t* temp = replicate -> headRecord;
         for (int i = 0; i < replicate -> numRecords; i++) {
@@ -457,21 +457,20 @@ void print_replicate(Replicate_t* replicate, MissingMask_t* mask, EggsConfig_t* 
             int numMissing = (int) (replicate -> numSamples * gsl_ran_beta(mask -> r, alpha, beta));
             shuffle_real_array(mask -> r, permu, replicate -> numSamples);
             for (int j = 0; j < numMissing; j++)
-                cb_set_bit(mask -> prev, permu[j]);
+                cb_set_bit(cb, permu[j]);
 
             print_record(temp, cb, eggsConfig, fpOut);
 
             // Clear set bits.
             for (int j = 0; j < numMissing; j++)
-                cb_clear_bit(mask -> prev, permu[j]);
+                cb_clear_bit(cb, permu[j]);
 
             temp = temp -> nextRecord;
         }
+        cb_destroy(cb);
     // EGGS's missingness method.
     } else if (eggsConfig -> maskFile != NULL) {
         CompactBitset* cb = cb_create(replicate -> numSamples);
-        mask -> prev = cb_create(replicate -> numSamples);
-        CompactBitset* temp = NULL;
 
         Record_t* temp = replicate -> headRecord;
         for (int i = 0; i < replicate -> numRecords; i++) {
@@ -479,19 +478,15 @@ void print_replicate(Replicate_t* replicate, MissingMask_t* mask, EggsConfig_t* 
             // Create mask for the current site.
             get_mask_for_next_site(mask, cb, replicate -> numRecords, replicate -> numSamples, i);
 
-            // Aplly mask to the site.
+            // Apply mask to the site.
             print_record(temp, cb, eggsConfig, fpOut);
-
-            // Swap the current and previous masks.
-            swap(cb, mask -> prev, temp);
 
             // Clear set bits to use in the next site.
             for (int j = 0; j < replicate -> numSamples; j++)
-                cb_clear_bit(mask -> prev, j);
+                cb_clear_bit(cb, j);
 
             temp = temp -> nextRecord;
         }
-
         cb_destroy(cb);
     // No missingness.
     } else {

@@ -8,9 +8,9 @@
 #ifndef MISSINGNESS_H
 #define MISSINGNESS_H
 
+#include "compact_bitset.h"
 #include "GenotypeParser.h"
 #include "kvec.h"
-#include "compact_bitset.h"
 #include "gsl/gsl_rng.h"
 #include "gsl/gsl_randist.h"
 
@@ -24,11 +24,11 @@ typedef struct {
     // numRecords - 1 array. Holds the probability the sample is 
     //  missing given that the sample was missing at the previous record.
     double* conditional;
-    gsl_rng* r;
-    // Holds previous block's missing state.
-    CompactBitset* prev;   
+    gsl_rng* r;  
     // Holds by sample prob of missing.
     double* blockMissing;
+    int* correspondingSample;
+    int* prevCorrespondingSample;
 } MissingMask_t;
 
 // Fisher-Yates shuffle algorithm for an integer array.
