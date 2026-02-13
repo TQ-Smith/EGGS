@@ -95,13 +95,13 @@ void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecor
                 mask -> correspondingSample[i] = randSample;
             } else {
                 // Otherwise no sample was chosen.
-                mask -> correspondingSample[i] = 0;
+                mask -> correspondingSample[i] = -1;
             }
         }
     } else {
         for (int i = 0; i < numSamples; i++) {
-            // If the previous site was missing.
-            if (mask -> prevCorrespondingSample[i] != 0) {
+            // If the previous site was missing. We use -1 as a flag to denote the previous site was not missing.
+            if (mask -> prevCorrespondingSample[i] != -1) {
                 // Use the same sample's probability if the current block should be missing.
                 if ((double) gsl_rng_uniform(mask -> r) < mask -> blockMissing[mask -> prevCorrespondingSample[i]]) {
                     // Set bit.
@@ -109,7 +109,7 @@ void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecor
                     // Keep current sample.
                     mask -> correspondingSample[i] = mask -> prevCorrespondingSample[i];
                 } else {
-                    mask -> correspondingSample[i] = 0;
+                    mask -> correspondingSample[i] = -1;
                 }
             // If the previous site was not missing, pick random sample.
             } else {
@@ -118,7 +118,7 @@ void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecor
                     cb_set_bit(cb, i);
                     mask -> correspondingSample[i] = randSample;
                 } else {
-                    mask -> correspondingSample[i] = 0;
+                    mask -> correspondingSample[i] = -1;
                 }
             }
         }
@@ -141,8 +141,7 @@ void destroy_missing_mask(MissingMask_t* mask) {
         free(mask -> correspondingSample);
     if (mask -> prevCorrespondingSample != NULL)
         free(mask -> prevCorrespondingSample);
-    if (mask -> conditional != NULL) {
-        free(mask -> conditional);
+    if (kv_size(mask -> mask) != 0) {
         for (int i = 0; i < mask -> numRecords; i++)
             cb_destroy(kv_A(mask -> mask, i));
         kv_destroy(mask -> mask);

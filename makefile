@@ -18,7 +18,7 @@ bin/eggs: lib src
 src: src/Main.o
 
 src/Main.o: src/Interface.o src/GenotypeParser.o src/Missingness.o
-	$(CC) $(CFLAGS) src/Main.c -o src/Main.o
+	$(CC) $(CFLAGS) -DHAVE_INLINE src/Main.c -o src/Main.o
 
 src/Interface.o:
 	$(CC) $(CFLAGS) src/Interface.c -o src/Interface.o

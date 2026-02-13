@@ -21,9 +21,6 @@ typedef struct {
     // Number of samples/records in the VCF.
     int numSamples;
     int numRecords;
-    // numRecords - 1 array. Holds the probability the sample is 
-    //  missing given that the sample was missing at the previous record.
-    double* conditional;
     gsl_rng* r;  
     // Holds by sample prob of missing.
     double* blockMissing;

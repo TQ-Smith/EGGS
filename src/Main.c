@@ -16,7 +16,7 @@
 #include <sys/stat.h>
 
 // Swap integer values.
-#define SWAP(a, b, temp) { a = temp; a = b; b = temp; }
+#define SWAP(a, b, temp) { temp = a; a = b; b = temp; }
 
 // Easy random uniform float with [0, 1)
 #define rand() ((float) rand() / (float) (RAND_MAX))
@@ -171,8 +171,8 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
 
 void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) {
     // Standard error by default.
-    FILE* indOut = stdout;
-    FILE* lociOut = stdout;
+    FILE* indOut = stderr;
+    FILE* lociOut = stderr;
     if (outName != NULL) {
         kstring_t* out = calloc(1, sizeof(kstring_t));
         ksprintf(out, "%s.ind.tsv", outName);
@@ -185,24 +185,22 @@ void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) 
     }
 
     int* sampleProportions = calloc(replicate -> numSamples, sizeof(int));
-
-    Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
-    record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
-    record -> numSamples = replicate -> numSamples;
     
     // Print loci file.
     fprintf(lociOut, "CHROM\tPOS\tPROP_MISSING\n");
     int numRecords = 0;
-    while (get_next_vcf_record(record, inputStream, false)) {
+    Record_t* temp = replicate -> headRecord;
+    for (int i = 0; i < replicate -> numRecords; i++) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++) {
-            if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING) {
+            if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right == MISSING) {
                 sampleProportions[i] += 1;
                 numMissing++;
             }
         }
-        fprintf(lociOut, "%s\t%d\t%lf\n", record -> chrom, record -> position, numMissing / (double) replicate -> numSamples);
+        fprintf(lociOut, "%s\t%d\t%lf\n", temp -> chrom, temp -> position, numMissing / (double) replicate -> numSamples);
         numRecords++;
+        temp = temp -> nextRecord;
     }
 
     if (outName == NULL) fprintf(stdout, "\n");
@@ -212,10 +210,39 @@ void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) 
     for (int i = 0; i < replicate -> numSamples; i++)
         fprintf(indOut, "%s\t%lf\n", replicate -> sampleNames[i], sampleProportions[i] / (double) numRecords);
 
-    destroy_record(record);
     free(sampleProportions);
     fclose(indOut);
     fclose(lociOut);
+}
+
+// Calculate the empirical distribution for the -r option.
+//  This method is redundant, but it is direct.
+void get_empirical(MissingMask_t* mask, Replicate_t* replicate, InputStream_t* inputStream) {
+    Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
+    record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
+    record -> numSamples = replicate -> numSamples;
+    
+    kvec_t(double) proportions;
+    kv_init(proportions);
+
+    // Calculate the proportion of missingness at each site.
+    int numRecords = 0;
+    while (get_next_vcf_record(record, inputStream, false)) {
+        int numMissing = 0;
+        for (int i = 0; i < replicate -> numSamples; i++)
+            if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)
+                numMissing++;
+        kv_push(double, proportions, numMissing / (double) record -> numSamples);
+        numRecords++;
+    }
+
+    mask -> blockMissing = calloc(numRecords, sizeof(double));
+    mask -> numRecords = numRecords;
+    for (int i = 0; i < numRecords; i++)
+        mask -> blockMissing[i] = kv_A(proportions, i);
+
+    destroy_record(record);
+    kv_destroy(proportions);
 }
 
 // Print a simple VCF header from a replicate.
@@ -299,8 +326,11 @@ void print_record(Record_t* record, CompactBitset* mask, EggsConfig_t* eggsConfi
             // If genotypes should be unphased with a 50/50 chance.
             if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
                 record -> genotypes[i].isPhased = false;
-                if (rand() < 0.5)
-                    SWAP(record -> genotypes[i].left, record -> genotypes[i].right, tempInt);
+                if (rand() < 0.5) {
+                    tempInt = record -> genotypes[i].left;
+                    record -> genotypes[i].left =  record -> genotypes[i].right;
+                    record -> genotypes[i].right = tempInt;
+                }
             }
 
             // If biallelic and locus should be unpolarized.
@@ -393,8 +423,11 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
             // If genotypes should be unphased with a 50/50 chance.
             if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
                 temp -> genotypes[i].isPhased = false;
-                if (rand() < 0.5)
-                    SWAP(temp -> genotypes[i].left, temp -> genotypes[i].right, tempInt);
+                if (rand() < 0.5) {
+                    tempInt = temp -> genotypes[i].left;
+                    temp -> genotypes[i].left =  temp -> genotypes[i].right;
+                    temp -> genotypes[i].right = tempInt;
+                }
             }
 
             if (swapStates && temp -> genotypes[i].left != MISSING) 
@@ -415,6 +448,14 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
                     temp -> genotypes[i].right = temp -> genotypes[i].left;
                 else
                     temp -> genotypes[i].left = temp -> genotypes[i].right;
+            }
+
+            // If sequencing error.
+            if (!eggsConfig -> pseudohap && eggsConfig -> probTransition == 0 && eggsConfig -> seqerr > 0) {
+                if (temp -> genotypes[i].left != MISSING && rand() < eggsConfig -> seqerr)
+                    temp -> genotypes[i].left ^= 1;
+                if (temp -> genotypes[i].right != MISSING && rand() < eggsConfig -> seqerr)
+                    temp -> genotypes[i].right ^= 1;
             }
         }
     }
@@ -455,6 +496,29 @@ void print_replicate(Replicate_t* replicate, MissingMask_t* mask, EggsConfig_t* 
         for (int i = 0; i < replicate -> numRecords; i++) {
             // Randomly mask out samples according to beta-distribution.
             int numMissing = (int) (replicate -> numSamples * gsl_ran_beta(mask -> r, alpha, beta));
+            shuffle_real_array(mask -> r, permu, replicate -> numSamples);
+            for (int j = 0; j < numMissing; j++)
+                cb_set_bit(cb, permu[j]);
+
+            print_record(temp, cb, eggsConfig, fpOut);
+
+            // Clear set bits.
+            for (int j = 0; j < numMissing; j++)
+                cb_clear_bit(cb, permu[j]);
+
+            temp = temp -> nextRecord;
+        }
+        cb_destroy(cb);
+    } else if (eggsConfig -> randomMissing != NULL) {
+        int* permu = calloc(replicate -> numSamples, sizeof(int));
+        for (int i = 0; i < replicate -> numSamples; i++)
+            permu[i] = i;
+        CompactBitset* cb = cb_create(replicate -> numSamples);
+
+        Record_t* temp = replicate -> headRecord;
+        for (int i = 0; i < replicate -> numRecords; i++) {
+            // Randomly mask out samples according to beta-distribution.
+            int numMissing = (int) (replicate -> numSamples * mask -> blockMissing[gsl_rng_uniform_int(mask -> r, mask -> numRecords)]);
             shuffle_real_array(mask -> r, permu, replicate -> numSamples);
             for (int j = 0; j < numMissing; j++)
                 cb_set_bit(cb, permu[j]);
@@ -615,8 +679,19 @@ int main(int argc, char* argv[]) {
         maskInput = init_input_stream(eggsConfig -> maskFile);
         missingReplicate = init_vcf_replicate(maskInput, true);
         mask = init_missing_mask(missingReplicate, maskInput);
-        destroy_input_stream(maskInput);
-        destroy_replicate(missingReplicate);
+    // Use empirical distribution.
+    } else if (eggsConfig -> randomMissing != NULL) {
+        mask = calloc(1, sizeof(MissingMask_t));
+        // Random masktribution just needs rng.
+        gsl_rng_env_setup();
+        const gsl_rng_type* T = gsl_rng_default;
+        gsl_rng* r = gsl_rng_alloc(T);
+        gsl_rng_set(r, time(NULL));
+        mask -> r = r;
+        // Calculate the empirical. Repurpose blockMissing in mask.
+        maskInput = init_input_stream(eggsConfig -> randomMissing);
+        missingReplicate = init_vcf_replicate(maskInput, true);
+        get_empirical(mask, missingReplicate, maskInput);
     // If we are using the beta masktribution, just create the rng for convience.
     } else if (eggsConfig -> betaMissing != NULL) {
         mask = calloc(1, sizeof(MissingMask_t));
@@ -627,18 +702,17 @@ int main(int argc, char* argv[]) {
         gsl_rng_set(r, time(NULL));
         mask -> r = r;
     }
+    destroy_input_stream(maskInput);
+    destroy_replicate(missingReplicate);
     
     // If VCF.
     if (strncmp(inputStream -> buffer -> s, "##fileformat=VCF", 16) == 0) {
 
-        // If verbose summary statistics only.
-        if (eggsConfig -> verbose) {
+        // If stats summary statistics only.
+        if (eggsConfig -> stats) {
             Replicate_t* replicate = init_vcf_replicate(inputStream, true);
+            parse_vcf(replicate, inputStream, eggsConfig -> keep);
             summary(replicate, inputStream, eggsConfig -> outFile);
-            destroy_replicate(replicate);
-            destroy_input_stream(inputStream);
-            destroy_eggs_configuration(eggsConfig);
-            return 0;
         }
 
         // If output basename was given, open file. Otherwise, we are printing to stdout.
@@ -670,7 +744,9 @@ int main(int argc, char* argv[]) {
 
         Replicate_t* replicate = init_vcf_replicate(inputStream, false);
         print_vcf_header(replicate, eggsConfig, fpOut);
-        parse_vcf(replicate, inputStream, eggsConfig -> keep);
+        // If stats on input, we already read in the file.
+        if (!eggsConfig -> stats)
+            parse_vcf(replicate, inputStream, eggsConfig -> keep);
         // If we are using EGGS's method, the target file numRecords <= mask.
         if (eggsConfig -> maskFile != NULL && replicate -> numRecords > mask -> numRecords)
             fprintf(stderr, "-m VCF contains fewer records than supplied VCF. Exiting!\n");

@@ -30,6 +30,8 @@ typedef struct {
     char* maskFile;
     // The string defining the VCF or mean and std. dev. for beta distribution.
     char* betaMissing;
+    // The VCF file for to calculate the distribution of missing genotypes.
+    char* randomMissing;
     // The mean and std err for random missing genotypes.
     double meanMissing;
     double stdMissing;
@@ -43,8 +45,8 @@ typedef struct {
     double probDeamination;
     // Use ms-style output.
     bool msOutput;
-    // Use verbose output.
-    bool verbose;
+    // Output missing statistics.
+    bool stats;
     // EIGENSTRAT files.
     char* eigenFiles;
     // The EGGS command the user ran.

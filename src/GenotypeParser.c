@@ -96,6 +96,8 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep
             } else if (numTabs == 1) {
                 // The second field is the position on the chromosome.
                 record -> position = (int) strtol(inputStream -> buffer -> s + prevIndex + 1, (char**) NULL, 10);
+            } else if (numTabs == 3) {
+                record -> ref = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
             } else if (numTabs == 4) {
                 // The fifth field holds the ALT alleles. Each record has at least two alleles.
                 //  Each additional allele is appended withinputStream -> buffer -> s a ','. For each ',' encountered,
@@ -103,6 +105,7 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep
                 for (int j = prevIndex + 1; inputStream -> buffer -> s[j] != '\t'; j++)
                     if (inputStream -> buffer -> s[j] == ',')
                         numAlleles++;
+                record -> alts = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
             } else if (numTabs == 7 && keep) {
                 record -> info = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
             } else if (numTabs > 8) {
