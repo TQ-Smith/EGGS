@@ -15,11 +15,60 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-// Swap integer values.
-#define SWAP(a, b, temp) { temp = a; a = b; b = temp; }
-
 // Easy random uniform float with [0, 1)
 #define rand() ((float) rand() / (float) (RAND_MAX))
+
+// Convert if the genotype file is not packed.
+void convertToUnpacked(int fd, char* snpFile, gzFile fpOut) {
+    // Now, we parse each site.
+    gzFile geno = gzdopen(fd, "r");
+    kstream_t* genoStream = ks_init(geno);
+    kstring_t* genoBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
+
+    gzFile snp = gzopen(snpFile, "r");
+    kstream_t* snpStream = ks_init(snp);
+    kstring_t* snpBuffer = (kstring_t*) calloc(1, sizeof(kstring_t));
+
+    while (true) {
+        ks_getuntil(snpStream, '\n', snpBuffer, 0);
+        if (ks_eof(snpStream))
+            break;
+        // Get all info of the SNP.
+        char* snpLine = strdup(snpBuffer -> s);
+        char* token = strtok(snpLine, " \t\n");
+        char* id = strdup(token); 
+        token = strtok(NULL, " \t\n");
+        char* chrom = strdup(token);
+        token = strtok(NULL, " \t\n");
+        token = strtok(NULL, " \t\n");
+        char* position = strdup(token);
+        token = strtok(NULL, " \t\n");
+        char* ref = strdup(token);
+        token = strtok(NULL, " \t\n");
+        char* alt = strdup(token);
+
+        // Print the site information.
+        gzprintf(fpOut, "%s\t%s\t%s\t%s\t%s\t.\t.\t.\tGT", chrom, position, id, ref, alt);
+        free(snpLine); free(id); free(chrom); free(position); free(ref); free(alt);
+
+        // Print each sample's genotype.
+        ks_getuntil(genoStream, '\n', genoBuffer, 0);
+        for (int i = 0; i < genoBuffer -> l; i++) {
+            switch (genoBuffer -> s[i]) {
+                case '0': gzprintf(fpOut, "\t0/0"); break;
+                case '1': gzprintf(fpOut, "\t0/1"); break;
+                case '2': gzprintf(fpOut, "\t1/1"); break;
+            }
+        }
+        gzprintf(fpOut, "\n");
+    }
+
+    free(snpBuffer -> s); free(snpBuffer);
+    ks_destroy(snpStream); 
+    free(genoBuffer -> s); free(genoBuffer);
+    ks_destroy(genoStream); 
+    gzclose(snp);
+}
 
 // Convert eigen/ancestry map format to VCF file.
 // Some code was taken from admixtools: https://github.com/DReichLab/AdmixTools/blob/master/src/geno.c
@@ -66,6 +115,14 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
         fprintf(stderr, "Invalid genotype file. Exiting!\n");
 		return;
 	}
+
+    // Determine if it is packed.
+    char firstChar;
+    if (pread(fd, &firstChar, 1, 0) != 'G' || pread(fd, &firstChar, 1, 0) != 'T') {
+        convertToUnpacked(fd, snpFile, fpOut);
+        close(fd);
+        return;
+    }
 
     // Map memory for file.
     fstat(fd, &sb);
@@ -185,22 +242,24 @@ void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) 
     }
 
     int* sampleProportions = calloc(replicate -> numSamples, sizeof(int));
+
+    Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
+    record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
+    record -> numSamples = replicate -> numSamples;
     
     // Print loci file.
     fprintf(lociOut, "CHROM\tPOS\tPROP_MISSING\n");
     int numRecords = 0;
-    Record_t* temp = replicate -> headRecord;
-    for (int i = 0; i < replicate -> numRecords; i++) {
+    while (get_next_vcf_record(record, inputStream, false, false)) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++) {
-            if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right == MISSING) {
+            if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING) {
                 sampleProportions[i] += 1;
                 numMissing++;
             }
         }
-        fprintf(lociOut, "%s\t%d\t%lf\n", temp -> chrom, temp -> position, numMissing / (double) replicate -> numSamples);
+        fprintf(lociOut, "%s\t%d\t%lf\n", record -> chrom, record -> position, numMissing / (double) replicate -> numSamples);
         numRecords++;
-        temp = temp -> nextRecord;
     }
 
     if (outName == NULL) fprintf(stdout, "\n");
@@ -210,6 +269,7 @@ void summary(Replicate_t* replicate, InputStream_t* inputStream, char* outName) 
     for (int i = 0; i < replicate -> numSamples; i++)
         fprintf(indOut, "%s\t%lf\n", replicate -> sampleNames[i], sampleProportions[i] / (double) numRecords);
 
+    destroy_record(record);
     free(sampleProportions);
     fclose(indOut);
     fclose(lociOut);
@@ -227,7 +287,7 @@ void get_empirical(MissingMask_t* mask, Replicate_t* replicate, InputStream_t* i
 
     // Calculate the proportion of missingness at each site.
     int numRecords = 0;
-    while (get_next_vcf_record(record, inputStream, false)) {
+    while (get_next_vcf_record(record, inputStream, false, false)) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++)
             if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)
@@ -255,11 +315,12 @@ void print_vcf_header(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile f
     gzprintf(fpOut, "##eggsCommand=%s\n", eggsConfig -> command);
     gzprintf(fpOut, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"); 
     // An ms-replicate was provided and we generate simple sample names by index.
-    if (replicate -> sampleNames == NULL)
-        for (int i = 0; i < replicate -> numSamples; i++)
+    if (replicate -> sampleNames == NULL || eggsConfig -> hap) {
+        int numSamples = eggsConfig -> hap ? (2 * replicate -> numSamples) : replicate -> numSamples;
+        for (int i = 0; i < numSamples; i++)
             gzprintf(fpOut, "\ts%d", i); 
     // Otherwise, print names from VCF.
-    else
+    } else
         for (int i = 0; i < replicate -> numSamples; i++)
             gzprintf(fpOut, "\t%s", replicate -> sampleNames[i]);
     gzprintf(fpOut, "\n");
@@ -346,12 +407,18 @@ void print_record(Record_t* record, CompactBitset* mask, EggsConfig_t* eggsConfi
                 record -> genotypes[i].right = 1;
 
             // If pseudohap is set, then randomly pick one allele.
-            if (eggsConfig -> pseudohap) {
+            if (eggsConfig -> pseudohap && (record -> genotypes[i].left != MISSING || record -> genotypes[i].right != MISSING)) {
                 record -> genotypes[i].isPhased = false;
-                if (rand() < 0.5)
-                    record -> genotypes[i].right = record -> genotypes[i].left;
-                else
+                if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right != MISSING)
                     record -> genotypes[i].left = record -> genotypes[i].right;
+                else if (record -> genotypes[i].right == MISSING && record -> genotypes[i].left != MISSING)
+                    record -> genotypes[i].right = record -> genotypes[i].left;
+                else {
+                    if (rand() < 0.5)
+                        record -> genotypes[i].right = record -> genotypes[i].left;
+                    else
+                        record -> genotypes[i].left = record -> genotypes[i].right;
+                }
             }
 
             // If sequencing error.
@@ -412,7 +479,7 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
         if (eggsConfig -> probTransition != 0 && rand() < eggsConfig -> probTransition)
             isTransition = true;
 
-        for (int i = 0; i < replicate -> numSamples; i++) {
+        for (int i = 0; i < temp -> numSamples; i++) {
 
             // If missing, use ancestral. If multiallelic use alternative.
             if (temp -> genotypes[i].left > 1 || temp -> genotypes[i].left == MISSING)
@@ -442,12 +509,18 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
                 temp -> genotypes[i].right = 1;
 
             // If pseudohap is set, then randomly pick one allele.
-            if (eggsConfig -> pseudohap) {
+            if (eggsConfig -> pseudohap && (temp -> genotypes[i].left != MISSING || temp -> genotypes[i].right != MISSING)) {
                 temp -> genotypes[i].isPhased = false;
-                if (rand() < 0.5)
-                    temp -> genotypes[i].right = temp -> genotypes[i].left;
-                else
+                if (temp -> genotypes[i].left == MISSING && temp -> genotypes[i].right != MISSING)
                     temp -> genotypes[i].left = temp -> genotypes[i].right;
+                else if (temp -> genotypes[i].right == MISSING && temp -> genotypes[i].left != MISSING)
+                    temp -> genotypes[i].right = temp -> genotypes[i].left;
+                else {
+                    if (rand() < 0.5)
+                        temp -> genotypes[i].right = temp -> genotypes[i].left;
+                    else
+                        temp -> genotypes[i].left = temp -> genotypes[i].right;
+                }
             }
 
             // If sequencing error.
@@ -582,7 +655,7 @@ void get_mu_sigma(InputStream_t* inputStream, double* mu, double* sigma) {
 
     // Calculate the proportion of missingness at each site.
     int numRecords = 0;
-    while (get_next_vcf_record(record, inputStream, false)) {
+    while (get_next_vcf_record(record, inputStream, false, false)) {
         int numMissing = 0;
         for (int i = 0; i < replicate -> numSamples; i++)
             if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)
@@ -640,7 +713,7 @@ int main(int argc, char* argv[]) {
         free(fileNames);
         destroy_eggs_configuration(eggsConfig);
         gzclose(fpOut);
-        return 1;
+        return 0;
     }
     
     // If a VCF file was given for random missingness, calculate mean and standard deviation per site.
@@ -711,8 +784,12 @@ int main(int argc, char* argv[]) {
         // If stats summary statistics only.
         if (eggsConfig -> stats) {
             Replicate_t* replicate = init_vcf_replicate(inputStream, true);
-            parse_vcf(replicate, inputStream, eggsConfig -> keep);
             summary(replicate, inputStream, eggsConfig -> outFile);
+            destroy_replicate(replicate);
+            destroy_input_stream(inputStream);
+            destroy_eggs_configuration(eggsConfig);
+            destroy_missing_mask(mask);
+            return 0;
         }
 
         // If output basename was given, open file. Otherwise, we are printing to stdout.
@@ -744,9 +821,7 @@ int main(int argc, char* argv[]) {
 
         Replicate_t* replicate = init_vcf_replicate(inputStream, false);
         print_vcf_header(replicate, eggsConfig, fpOut);
-        // If stats on input, we already read in the file.
-        if (!eggsConfig -> stats)
-            parse_vcf(replicate, inputStream, eggsConfig -> keep);
+        parse_vcf(replicate, inputStream, eggsConfig -> keep, eggsConfig -> hap);
         // If we are using EGGS's method, the target file numRecords <= mask.
         if (eggsConfig -> maskFile != NULL && replicate -> numRecords > mask -> numRecords)
             fprintf(stderr, "-m VCF contains fewer records than supplied VCF. Exiting!\n");

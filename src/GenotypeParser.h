@@ -97,16 +97,18 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream, bool eat);
 //  Record_t* record -> An allocated record. Set fields.
 //  InputStream_t* inputStream -> The VCF file we are reading.
 //  bool keep -> If we are keeping the info field.
+//  bool hap -> If the lineages in the resulting VCF should be haploid.
 // Returns: bool, true is a record was read. false, if eof.
-bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep);
+bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep, bool hap);
 
 // Reads in whole VCF file and adds each record to replicate.
 // Accepts:
 //  Replicate_t* replicate -> An allocated, but empty, replicate to add records to.
 //  InputStream_t* inputStream -> The VCF file we are reading from.
 //  bool keep -> Keep info tags.
+//  bool hap -> If the lineages in the resulting VCF should be haploid.
 // Returns: void.
-void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream, bool keep);
+void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream, bool keep, bool hap);
 
 // Reads in a ms replicate from input stream and returns replicate.
 // Accepts:

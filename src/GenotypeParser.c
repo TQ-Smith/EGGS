@@ -73,7 +73,7 @@ Replicate_t* init_vcf_replicate(InputStream_t* inputStream, bool eat) {
     return replicate;
 }
 
-bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep) {
+bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep, bool hap) {
 
     int dret = 0, numTabs = 0, prevIndex = 0, numAlleles = 2;
 
@@ -109,17 +109,32 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep
             } else if (numTabs == 7 && keep) {
                 record -> info = strndup(inputStream -> buffer -> s + prevIndex + 1, i - prevIndex - 1);
             } else if (numTabs > 8) {
-                record -> genotypes[numTabs - 9].left = MISSING;
-                record -> genotypes[numTabs - 9].right = MISSING;
-                record -> genotypes[numTabs - 9].isPhased = false;
+                Genotype_t temp;
+                temp.left = MISSING;
+                temp.right = MISSING;
+                temp.isPhased = false;
                 char* start = inputStream -> buffer -> s + prevIndex + 1;
                 char* next = start;
                 if (start[0] != '.')
-                    record -> genotypes[numTabs - 9].left = (int) strtol(start, &next, 10);
-                if (next[0] == '|')
-                    record -> genotypes[numTabs - 9].isPhased = true;
+                    temp.left = (int) strtol(start, &next, 10);
+                if (next[0] == '|') 
+                    temp.isPhased = true;
                 if ((next[0] == '|' || next[0] == '/') && next[1] != '.')
-                    record -> genotypes[numTabs - 9].right = (int) strtol(next + 1, (char**) NULL, 10);
+                    temp.right = (int) strtol(next + 1, (char**) NULL, 10);
+                
+                int sampleIndex = numTabs - 9;
+                if (hap) {
+                    record -> genotypes[2 * sampleIndex].left = temp.left;
+                    record -> genotypes[2 * sampleIndex].right = MISSING;
+                    record -> genotypes[2 * sampleIndex].isPhased = false;
+                    record -> genotypes[2 * sampleIndex + 1].left = temp.right;
+                    record -> genotypes[2 * sampleIndex + 1].right = MISSING;
+                    record -> genotypes[2 * sampleIndex + 1].isPhased = false;
+                } else {
+                    record -> genotypes[sampleIndex].left = temp.left;
+                    record -> genotypes[sampleIndex].right = temp.right;
+                    record -> genotypes[sampleIndex].isPhased = temp.isPhased;
+                }
             }
             prevIndex = i;
             numTabs++;
@@ -132,18 +147,23 @@ bool get_next_vcf_record(Record_t* record, InputStream_t* inputStream, bool keep
 
 }
 
-void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream, bool keep) {
+void parse_vcf(Replicate_t* replicate, InputStream_t* inputStream, bool keep, bool hap) {
     int recordIndex = 0;
     while (true) {
 
         // Allocate memory for a new record.
         Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
-        record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
-        record -> numSamples = replicate -> numSamples;
+        if (hap) {
+            record -> genotypes = (Genotype_t*) calloc(2 * replicate -> numSamples, sizeof(Genotype_t));
+            record -> numSamples = 2 * replicate -> numSamples;
+        } else {
+            record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
+            record -> numSamples = replicate -> numSamples;
+        }
         record -> recordIndex = recordIndex;
 
         // While not EOF, add record to the list.
-        if (get_next_vcf_record(record, inputStream, keep)) {
+        if (get_next_vcf_record(record, inputStream, keep, hap)) {
             if (replicate -> numRecords == 0) {
                 replicate -> headRecord = record;
                 replicate -> tailRecord = record;

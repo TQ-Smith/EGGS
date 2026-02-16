@@ -41,7 +41,7 @@ MissingMask_t* init_missing_mask(Replicate_t* replicate, InputStream_t* inputStr
     record -> numSamples = replicate -> numSamples;
 
     // Read in each record and set bit corresponding to sample if missing.
-    while (get_next_vcf_record(record, inputStream, false)) {
+    while (get_next_vcf_record(record, inputStream, false, false)) {
         CompactBitset* cb = cb_create(replicate -> numSamples);
         for (int i = 0; i < replicate -> numSamples; i++)
             if (record -> genotypes[i].left == MISSING && record -> genotypes[i].right == MISSING)

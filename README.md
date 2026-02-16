@@ -5,6 +5,8 @@
 
 The manual can be found at [https://github.com/TQ-Smith/EGGS/wiki]
 
+## TL;DR
+
 ## License 
 
 This project is licensed under the [MIT License](./LICENSE).

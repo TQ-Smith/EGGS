@@ -29,6 +29,7 @@ void print_help() {
     fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
     fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
+    fprintf(stderr, "                                         When one allele is present for a sample, that allele is used.\n");
     fprintf(stderr, "    -g,--seqerr     DOUBLE          Simulate next-generation sequencing error. For biallelic sites, switch allele\n");
     fprintf(stderr, "                                         to other allele with probability DOUBLE. Ignored when -d or -s is used.\n");
     fprintf(stderr, "    -o,--out        STR             Basename to use for output files instead of stdout.\n");
@@ -43,7 +44,7 @@ void print_help() {
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segment in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs if not provided or invalid.\n");
     fprintf(stderr, "    -a,--hap                        Split diploid to seperate samples.\n");
-    fprintf(stderr, "                                        Cannot use with -x option.\n");
+    fprintf(stderr, "                                        For ms-style input, lineages are their own sample in VCF output.\n");
     fprintf(stderr, "    -x,--ms                         Output ms-style replicates. Cannot use missing data options.\n");
     fprintf(stderr, "                                        If a genotype is missing, then the ancestral is used. If multiallelic VCF site,\n");
     fprintf(stderr, "                                        then any alternative alleles are treated as derived.\n");
