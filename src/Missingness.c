@@ -62,6 +62,13 @@ MissingMask_t* init_missing_mask(Replicate_t* replicate, InputStream_t* inputStr
 }
 
 void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecords, int numSamples, int site) {
+    // Allocate memory.
+    if (mask -> prevCorrespondingSample == NULL && mask -> correspondingSample == NULL) {
+        mask -> prevCorrespondingSample = calloc(numSamples, sizeof(int));
+        mask -> correspondingSample = calloc(numSamples, sizeof(int));
+    }
+
+    // Get block boundaries.
     int lower = (int) (site * (mask -> numRecords / (double) numRecords));
     int upper;
     if (site == numRecords - 1) 
@@ -82,7 +89,7 @@ void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecor
     }
     for (int i = 0; i < mask -> numSamples; i++)
         mask -> blockMissing[i] /= size;
-
+    
     // If it is the first site, we randomly choose.
     if (site == 0) {
         for (int i = 0; i < numSamples; i++) {
@@ -127,7 +134,6 @@ void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecor
     int* temp = mask -> prevCorrespondingSample;
     mask -> prevCorrespondingSample = mask -> correspondingSample;
     mask -> correspondingSample = temp;
-
 }
 
 void destroy_missing_mask(MissingMask_t* mask) {
