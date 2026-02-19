@@ -24,8 +24,6 @@ typedef struct {
     gsl_rng* r;  
     // Holds by sample prob of missing.
     double* blockMissing;
-    int* correspondingSample;
-    int* prevCorrespondingSample;
 } MissingMask_t;
 
 // Fisher-Yates shuffle algorithm for an integer array.

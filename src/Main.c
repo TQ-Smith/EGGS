@@ -543,7 +543,7 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
     }
 }
 
-// Print the list of records in a replicate.
+// Print the list of records in a replicate. This is messy.
 // Accepts:
 //  InputStream_t* inputStream -> The input stream.
 //  Replicate_t* replicate -> The records to print.
@@ -556,9 +556,52 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
         print_ms_replicate(replicate, eggsConfig, fpOut);
         return;
     } 
-
+    
     // Otherwise, we print a VCF.
+    gzprintf(fpOut, "##fileformat=VCFv4.2\n");
     print_vcf_header(replicate, eggsConfig, fpOut);
+
+    // If out inputStream is NULL, then we are reading in an ms-replicate.
+    //  It has already been read in. Logic explained below.
+    if (inputStream == NULL) {
+        double alpha, beta;
+        if (eggsConfig -> meanMissing != -1) {
+            alpha = (eggsConfig -> meanMissing * eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) / (eggsConfig -> stdMissing * eggsConfig -> stdMissing) - eggsConfig -> meanMissing;
+            beta = (alpha / eggsConfig -> meanMissing) * (1 - eggsConfig -> meanMissing);
+        }
+        int* permu = calloc(replicate -> numSamples, sizeof(int));
+        for (int i = 0; i < replicate -> numSamples; i++)
+            permu[i] = i;
+        CompactBitset* cb = cb_create(replicate -> numSamples);
+        Record_t* temp = replicate -> headRecord;
+        for (int i = 0; i < replicate -> numRecords; i++) {
+            if (eggsConfig -> meanMissing != -1) {
+                int numMissing = (int) (replicate -> numSamples * gsl_ran_beta(mask -> r, alpha, beta));
+                shuffle_real_array(mask -> r, permu, replicate -> numSamples);
+                for (int j = 0; j < numMissing; j++)
+                    cb_set_bit(cb, permu[j]);
+            } else if (eggsConfig -> randomMissing != NULL) {
+                int numMissing = (int) (replicate -> numSamples * mask -> blockMissing[gsl_rng_uniform_int(mask -> r, mask -> numRecords)]);
+                shuffle_real_array(mask -> r, permu, replicate -> numSamples);
+                for (int j = 0; j < numMissing; j++)
+                    cb_set_bit(cb, permu[j]);
+            } else if (eggsConfig -> maskFile != NULL) {
+                get_mask_for_next_site(mask, cb, replicate -> numRecords, replicate -> numSamples, i);
+            }
+
+            // Apply mask to the site.
+            print_record(temp, cb, eggsConfig, fpOut);
+            // Clear set bits to use in the next site.
+            for (int j = 0; j < replicate -> numSamples; j++)
+                cb_clear_bit(cb, j);
+            temp = temp -> nextRecord;
+        }
+        free(permu);
+        cb_destroy(cb);
+        return;
+    }
+
+    // If the input was VCF. This is more code but faster than reading in the whole file.
 
     // Allocate memory for a new record.
     Record_t* record = (Record_t*) calloc(1, sizeof(Record_t));
@@ -569,7 +612,7 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
         record -> genotypes = (Genotype_t*) calloc(replicate -> numSamples, sizeof(Genotype_t));
         record -> numSamples = replicate -> numSamples;
     }
-
+    
     // Beta missingness.
     if (eggsConfig -> meanMissing != -1) {
         double alpha = (eggsConfig -> meanMissing * eggsConfig -> meanMissing * (1 - eggsConfig -> meanMissing)) / (eggsConfig -> stdMissing * eggsConfig -> stdMissing) - eggsConfig -> meanMissing;
@@ -818,7 +861,6 @@ int main(int argc, char* argv[]) {
         }
 
         // Eat meta info lines until line starting with #CHROM.
-        gzprintf(fpOut, "##fileformat=VCFv4.2\n");
         int dret;
         do {
             ks_getuntil(inputStream -> fpIn, '\n', inputStream -> buffer, &dret);
@@ -831,6 +873,7 @@ int main(int argc, char* argv[]) {
         } while (strncmp(inputStream -> buffer -> s, "#C", 2) != 0);
 
         Replicate_t* replicate = init_vcf_replicate(inputStream, false);
+    
         // If we are using EGGS's method, the target file numRecords <= mask.
         if (eggsConfig -> maskFile != NULL && replicate -> numRecords > mask -> numRecords)
             fprintf(stderr, "-m VCF contains fewer records than supplied VCF. Exiting!\n");
@@ -879,10 +922,8 @@ int main(int argc, char* argv[]) {
             }
 
             // Print out replicate.
-            if (!eggsConfig -> msOutput)
-                print_vcf_header(replicate, eggsConfig, fpOut);
             print_replicate(NULL, replicate, mask, eggsConfig, fpOut);
-
+            
             gzclose(fpOut);
             destroy_replicate(replicate);
             numReps++;
