@@ -61,15 +61,15 @@ MissingMask_t* init_missing_mask(Replicate_t* replicate, InputStream_t* inputStr
     return mask;
 }
 
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
+
 void get_mask_for_next_site(MissingMask_t* mask, CompactBitset* cb, int numRecords, int numSamples, int site) {
 
     // Get block boundaries.
-    int lower = (int) (site * (mask -> numRecords / (double) numRecords));
-    int upper;
-    if (site == numRecords - 1) 
-        upper = mask -> numRecords - 1;
-    else 
-        upper = (int) ((site + 1) * (mask -> numRecords / (double) numRecords)) - 1;
+    int blockSize = mask -> numRecords / numRecords;
+    int remainder = mask -> numRecords % numRecords;
+    int lower = site * blockSize + MIN(site, remainder);
+    int upper = (site + 1) * blockSize + MIN(site + 1, remainder) - 1;
     int size = (upper - lower) + 1;
 
     // Calculate proportion of missing sites for samples within the current block.

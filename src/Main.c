@@ -572,9 +572,9 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
         int* permu = calloc(replicate -> numSamples, sizeof(int));
         for (int i = 0; i < replicate -> numSamples; i++)
             permu[i] = i;
-        CompactBitset* cb = cb_create(replicate -> numSamples);
         Record_t* temp = replicate -> headRecord;
         for (int i = 0; i < replicate -> numRecords; i++) {
+            CompactBitset* cb = cb_create(replicate -> numSamples);
             if (eggsConfig -> meanMissing != -1) {
                 int numMissing = (int) (replicate -> numSamples * gsl_ran_beta(mask -> r, alpha, beta));
                 shuffle_real_array(mask -> r, permu, replicate -> numSamples);
@@ -591,13 +591,10 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
 
             // Apply mask to the site.
             print_record(temp, cb, eggsConfig, fpOut);
-            // Clear set bits to use in the next site.
-            for (int j = 0; j < replicate -> numSamples; j++)
-                cb_clear_bit(cb, j);
+            cb_destroy(cb);
             temp = temp -> nextRecord;
         }
         free(permu);
-        cb_destroy(cb);
         return;
     }
 
@@ -620,9 +617,9 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
         int* permu = calloc(replicate -> numSamples, sizeof(int));
         for (int i = 0; i < replicate -> numSamples; i++)
             permu[i] = i;
-        CompactBitset* cb = cb_create(replicate -> numSamples);
 
         while (get_next_vcf_record(record, inputStream, false, eggsConfig -> hap))  {
+            CompactBitset* cb = cb_create(replicate -> numSamples);
             // Randomly mask out samples according to beta-distribution.
             int numMissing = (int) (replicate -> numSamples * gsl_ran_beta(mask -> r, alpha, beta));
             shuffle_real_array(mask -> r, permu, replicate -> numSamples);
@@ -631,19 +628,15 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
 
             print_record(record, cb, eggsConfig, fpOut);
 
-            // Clear set bits.
-            for (int j = 0; j < numMissing; j++)
-                cb_clear_bit(cb, permu[j]);
-
+            cb_destroy(cb);
         }
-        cb_destroy(cb);
     } else if (eggsConfig -> randomMissing != NULL) {
         int* permu = calloc(replicate -> numSamples, sizeof(int));
         for (int i = 0; i < replicate -> numSamples; i++)
             permu[i] = i;
-        CompactBitset* cb = cb_create(replicate -> numSamples);
 
         while (get_next_vcf_record(record, inputStream, false, eggsConfig -> hap)) {
+            CompactBitset* cb = cb_create(replicate -> numSamples);
             // Randomly mask out samples according to beta-distribution.
             int numMissing = (int) (replicate -> numSamples * mask -> blockMissing[gsl_rng_uniform_int(mask -> r, mask -> numRecords)]);
             shuffle_real_array(mask -> r, permu, replicate -> numSamples);
@@ -652,21 +645,17 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
 
             print_record(record, cb, eggsConfig, fpOut);
 
-            // Clear set bits.
-            for (int j = 0; j < numMissing; j++)
-                cb_clear_bit(cb, permu[j]);
+            cb_destroy(cb);
         }
-        cb_destroy(cb);
     // EGGS's missingness method.
     } else if (eggsConfig -> maskFile != NULL) {
 
         // Read in whole VCF.
         parse_vcf(replicate, inputStream, eggsConfig -> keep, eggsConfig -> hap);
 
-        CompactBitset* cb = cb_create(replicate -> numSamples);
-
         Record_t* temp = replicate -> headRecord;
         for (int i = 0; i < replicate -> numRecords; i++) {
+            CompactBitset* cb = cb_create(replicate -> numSamples);
             
             // Create mask for the current site.
             get_mask_for_next_site(mask, cb, replicate -> numRecords, replicate -> numSamples, i);
@@ -674,13 +663,9 @@ void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, Missing
             // Apply mask to the site.
             print_record(temp, cb, eggsConfig, fpOut);
             
-            // Clear set bits to use in the next site.
-            for (int j = 0; j < replicate -> numSamples; j++)
-                cb_clear_bit(cb, j);
-
+            cb_destroy(cb);
             temp = temp -> nextRecord;
         }
-        cb_destroy(cb);
     // No missingness.
     } else {
         while (get_next_vcf_record(record, inputStream, false, eggsConfig -> hap))

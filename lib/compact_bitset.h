@@ -78,14 +78,6 @@ static void cb_set_bit(CompactBitset* cb, int bit) {
     cb->bits[bit / WORDSZ] |= ((uint64_t)1 << (bit % WORDSZ));
 }
 
-static void cb_clear_bit(CompactBitset* cb, int bit) {
-    if (bit < 0 || bit >= cb->nbits) {
-        fprintf(stderr, "Error: bit index %d out of range [0, %d)\n", bit, cb->nbits);
-        exit(EXIT_FAILURE);
-    }
-    cb->bits[bit / WORDSZ] &= ~((uint64_t)1 << (bit % WORDSZ));
-}
-
 static bool cb_get_bit(const CompactBitset* cb, int bit) {
     if (bit < 0 || bit >= cb->nbits) {
         fprintf(stderr, "Error: bit index %d out of range [0, %d)\n", bit, cb->nbits);
