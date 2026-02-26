@@ -769,6 +769,7 @@ int main(int argc, char* argv[]) {
 
     // Read from stdin.
     InputStream_t* inputStream = init_input_stream(NULL);
+    fprintf(stderr, "Reading from stdin.\n");
 
     // Replicate counter for ms-style replicates.
     int numReps = 1;
