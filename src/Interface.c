@@ -117,7 +117,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         return -1;
     }
     // Cannot use negative sequencing error.
-    if (eggsConfig -> seqerr < 0 && eggsConfig -> seqerr >= 1) {
+    if (eggsConfig -> seqerr < 0 || eggsConfig -> seqerr >= 1) {
         fprintf(stderr, "-g must be positive real number less than 1. Exiting!\n");
         return -1;
     }
