@@ -58,6 +58,7 @@ void convertToUnpacked(int fd, char* snpFile, gzFile fpOut) {
                 case '0': gzprintf(fpOut, "\t0/0"); break;
                 case '1': gzprintf(fpOut, "\t0/1"); break;
                 case '2': gzprintf(fpOut, "\t1/1"); break;
+                default: gzprintf(fpOut, "\t./."); break;
             }
         }
         gzprintf(fpOut, "\n");
@@ -118,12 +119,12 @@ void convertEigenToVCF(char* genoFile, char* snpFile, char* indFile, gzFile fpOu
 
     // Determine if it is packed.
     char firstChar;
-    if (pread(fd, &firstChar, 1, 0) != 'G' || pread(fd, &firstChar, 1, 0) != 'T') {
+    pread(fd, &firstChar, 1, 0);
+    if (firstChar != 'G' && firstChar != 'T') {
         convertToUnpacked(fd, snpFile, fpOut);
         close(fd);
         return;
     }
-
     // Map memory for file.
     fstat(fd, &sb);
 	genoMemLength = (unsigned long) sb.st_size;
