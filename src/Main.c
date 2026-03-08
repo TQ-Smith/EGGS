@@ -730,6 +730,13 @@ int main(int argc, char* argv[]) {
     
     if (eggsConfig == NULL)
         return -1;
+
+    // Print help.
+    if (eggsConfig -> help) {
+        print_help();
+        destroy_eggs_configuration(eggsConfig);
+        return 0;
+    }
     
     // If -e was set, convert file and exit.
     if (eggsConfig -> eigenFiles != NULL) {

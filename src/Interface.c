@@ -174,7 +174,6 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
         switch (c) {
             case ':': fprintf(stderr, "Error! Option %s is missing an argument! Exiting ...\n", argv[options.i - 1]); return NULL;
             case '?': fprintf(stderr, "Error! \"%s\" is unknown! Exiting ...\n", argv[options.i - 1]); return NULL;
-            case 'h': print_help(); return NULL;
         }
 	}
 
@@ -199,6 +198,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> msOutput = false;
     eggsConfig -> stats = false;
     eggsConfig -> keep = false;
+    eggsConfig -> help = true;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
