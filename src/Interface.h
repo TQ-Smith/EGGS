@@ -19,7 +19,7 @@ typedef struct {
     // If records should be unphased.
     bool unphase;
     // If biallelic records should be unpolarized.
-    bool unpolarize;
+    double unpolarize;
     // If records should be made into pseudohaps.
     bool pseudohap;
     // Next generation sequencing error.

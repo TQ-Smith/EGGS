@@ -27,7 +27,7 @@ void print_help() {
     fprintf(stderr, "                                         and outputs VCF equivalent. Assumes all sites have REF and ALT alleles.\n");
     fprintf(stderr, "                                         No hash checking is performed as in ADMIXTOOLS.\n");
     fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
-    fprintf(stderr, "    -p,--unpolarize                 Biallelic site alleles swapped with a probability of 0.5\n");
+    fprintf(stderr, "    -p,--unpolarize DOUBLE          For each biallelic site, alleles are swapped with supplied probability.\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
     fprintf(stderr, "                                         When one allele is present for a sample, that allele is used.\n");
     fprintf(stderr, "    -g,--seqerr     DOUBLE          Simulate next-generation sequencing error. For biallelic sites, switch allele\n");
@@ -43,7 +43,7 @@ void print_help() {
     fprintf(stderr, "                                        the site is a transition and prob2 is the probability of deamination.\n");
     fprintf(stderr, "    -l,--length     INT             Only used with ms-style input. Sets length of segment in base-pairs.\n");
     fprintf(stderr, "                                        Default 1,000,000 base-pairs if not provided or invalid.\n");
-    fprintf(stderr, "    -a,--hap                        Split diploid to seperate samples.\n");
+    fprintf(stderr, "    -a,--hap                        Split diploid to separate samples.\n");
     fprintf(stderr, "                                        For ms-style input, lineages are their own sample in VCF output.\n");
     fprintf(stderr, "    -x,--ms                         Output ms-style replicates. Cannot use missing data options.\n");
     fprintf(stderr, "                                        If a genotype is missing, then the ancestral is used. If multiallelic VCF site,\n");
@@ -60,7 +60,7 @@ static ko_longopt_t long_options[] = {
     {"help",            ko_no_argument,         'h'},
     {"eigenstrat",      ko_required_argument,   'e'},
     {"unphase",         ko_no_argument,         'u'},
-    {"unpolarize",      ko_no_argument,         'p'},
+    {"unpolarize",      ko_required_argument,   'p'},
     {"pseudohap",       ko_no_argument,         's'},
     {"out",             ko_required_argument,   'o'},
     {"mask",            ko_required_argument,   'm'},
@@ -116,8 +116,13 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         fprintf(stderr, "Cannot use -x and -a together. Exiting!\n");
         return -1;
     }
-    // Cannot use negative sequencing error.
+    // Valid sequencing error.
     if (eggsConfig -> seqerr < 0 || eggsConfig -> seqerr >= 1) {
+        fprintf(stderr, "-g must be positive real number less than 1. Exiting!\n");
+        return -1;
+    }
+    // Valid polarization probability.
+    if (eggsConfig -> unpolarize < 0 || eggsConfig -> unpolarize >= 1) {
         fprintf(stderr, "-g must be positive real number less than 1. Exiting!\n");
         return -1;
     }
@@ -165,7 +170,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "khxaupsto:m:r:l:b:d:e:g:";
+    const char *opt_str = "khxaup:sto:m:r:l:b:d:e:g:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -181,7 +186,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     EggsConfig_t* eggsConfig = (EggsConfig_t*) calloc(1, sizeof(EggsConfig_t));
     eggsConfig -> eigenFiles = NULL;
     eggsConfig -> unphase = false;
-    eggsConfig -> unpolarize = false;
+    eggsConfig -> unpolarize = 0;
     eggsConfig -> pseudohap = false;
     eggsConfig -> seqerr = 0;
     eggsConfig -> outFile = NULL;
@@ -198,7 +203,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     eggsConfig -> msOutput = false;
     eggsConfig -> stats = false;
     eggsConfig -> keep = false;
-    eggsConfig -> help = true;
+    eggsConfig -> help = false;
     eggsConfig -> command = NULL;
 
     // Get parameters from user.
@@ -207,7 +212,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
         switch (c) {
             case 'e': eggsConfig -> eigenFiles = strdup(options.arg); break;
             case 'u': eggsConfig -> unphase = true; break;
-            case 'p': eggsConfig -> unpolarize = true; break;
+            case 'p': eggsConfig -> unpolarize = (double) strtod(options.arg, (char**) NULL); break;
             case 's': eggsConfig -> pseudohap = true; break;
             case 'g': eggsConfig -> seqerr = (double) strtod(options.arg, (char**) NULL); break;
             case 'o': eggsConfig -> outFile = strdup(options.arg); break;

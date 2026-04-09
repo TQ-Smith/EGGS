@@ -366,9 +366,9 @@ void print_record(Record_t* record, CompactBitset* mask, EggsConfig_t* eggsConfi
 
     // Used to swap allele to unphase.
     int tempInt = 0;
-    // Flag is set if biallelic site should be unpolarized with 50/50 chance.
+    // Flag is set if biallelic site should be unpolarized.
     bool swapStates = false;
-    if (eggsConfig -> unpolarize && record -> numAlleles == 2 && rand() < 0.5)
+    if (eggsConfig -> unpolarize > 0 && record -> numAlleles == 2 && rand() < eggsConfig -> unpolarize)
         swapStates = true;
 
     // Flag to set if biallelic site should be deanimated.
@@ -470,9 +470,9 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
     for (Record_t* temp = replicate -> headRecord; temp != NULL; temp = temp -> nextRecord) {
         // Used to swap allele to unphase.
         int tempInt = 0;
-        // Flag is set if biallelic site should be unpolarized with 50/50 chance.
+        // Flag is set if biallelic site should be unpolarized.
         bool swapStates = false;
-        if (eggsConfig -> unpolarize && rand() < 0.5)
+        if (eggsConfig -> unpolarize > 0 && rand() < eggsConfig -> unpolarize)
             swapStates = true;
 
         // Flag to set if biallelic site should be deanimated.
@@ -554,6 +554,9 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
 // Returns: void.
 void print_replicate(InputStream_t* inputStream, Replicate_t* replicate, MissingMask_t* mask, EggsConfig_t* eggsConfig, gzFile fpOut) {
     if (eggsConfig -> msOutput) {
+        // A VCF file was given, we have to read it in.
+        if (inputStream != NULL)
+            parse_vcf(replicate, inputStream, false, eggsConfig -> hap);
         print_ms_replicate(replicate, eggsConfig, fpOut);
         return;
     } 
@@ -777,7 +780,6 @@ int main(int argc, char* argv[]) {
 
     // Read from stdin.
     InputStream_t* inputStream = init_input_stream(NULL);
-    fprintf(stderr, "Reading from stdin.\n");
 
     // Replicate counter for ms-style replicates.
     int numReps = 1;
