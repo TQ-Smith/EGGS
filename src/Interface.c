@@ -14,7 +14,7 @@
 // Our help menu.
 void print_help() {
     fprintf(stderr, "\n");
-    fprintf(stderr, "EGGS v1.0\n");
+    fprintf(stderr, "EGGS v1.0.3\n");
     fprintf(stderr, "---------\n\n");
     fprintf(stderr, "Written by T. Quinn Smith\n");
     fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
