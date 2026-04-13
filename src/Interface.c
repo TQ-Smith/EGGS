@@ -14,7 +14,7 @@
 // Our help menu.
 void print_help() {
     fprintf(stderr, "\n");
-    fprintf(stderr, "EGGS v1.0.4\n");
+    fprintf(stderr, "EGGS v1.0.0\n");
     fprintf(stderr, "---------\n\n");
     fprintf(stderr, "Written by T. Quinn Smith\n");
     fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
@@ -26,7 +26,8 @@ void print_help() {
     fprintf(stderr, "    -e,--eigenstrat GENO,SNP,IND    Ignores all other options except -o. Reads in EIGENSTRAT/ANCESTRYMAP files\n");
     fprintf(stderr, "                                         and outputs VCF equivalent. Assumes all sites have REF and ALT alleles.\n");
     fprintf(stderr, "                                         No hash checking is performed as in ADMIXTOOLS.\n");
-    fprintf(stderr, "    -u,--unphase                    Left and right genotypes are swapped with a probability of 0.5\n");
+    fprintf(stderr, "    -u,--unphase    1,2             For 1, left and right alleles are swapped with a probability of 0.5\n");
+    fprintf(stderr, "                                         For 2, left and right alleles are placed in ascending order.\n");
     fprintf(stderr, "    -p,--unpolarize DOUBLE          For each biallelic site, alleles are swapped with supplied probability.\n");
     fprintf(stderr, "    -s,--pseudohap                  Pseudohaploidize all samples. Automatically removes phase.\n");
     fprintf(stderr, "                                         When one allele is present for a sample, that allele is used.\n");
@@ -106,6 +107,11 @@ int check_configuration(EggsConfig_t* eggsConfig) {
         fprintf(stderr, "-m %s does not exist. Exiting!\n", eggsConfig -> maskFile);
         return -1;
     }
+    // Unphase mode.
+    if (eggsConfig -> unphase != 0 && eggsConfig -> unphase != 1 && eggsConfig -> unphase != 2) {
+        fprintf(stderr, "-u must be 1 or 2. Exiting!\n");
+        return -1;
+    }
     // If random file given, make sure it exists.
     if (eggsConfig -> randomMissing != NULL && access(eggsConfig -> randomMissing, F_OK) != 0) {
         fprintf(stderr, "-r %s does not exist. Exiting!\n", eggsConfig -> randomMissing);
@@ -170,7 +176,7 @@ int check_configuration(EggsConfig_t* eggsConfig) {
 
 EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
 
-    const char *opt_str = "khxaup:sto:m:r:l:b:d:e:g:";
+    const char *opt_str = "khxau:p:sto:m:r:l:b:d:e:g:";
     ketopt_t options = KETOPT_INIT;
     int c;
 
@@ -185,7 +191,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     // Set configuration defaults.
     EggsConfig_t* eggsConfig = (EggsConfig_t*) calloc(1, sizeof(EggsConfig_t));
     eggsConfig -> eigenFiles = NULL;
-    eggsConfig -> unphase = false;
+    eggsConfig -> unphase = 0;
     eggsConfig -> unpolarize = 0;
     eggsConfig -> pseudohap = false;
     eggsConfig -> seqerr = 0;
@@ -211,7 +217,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
     while ((c = ketopt(&options, argc, argv, 1, opt_str, long_options)) >= 0) {
         switch (c) {
             case 'e': eggsConfig -> eigenFiles = strdup(options.arg); break;
-            case 'u': eggsConfig -> unphase = true; break;
+            case 'u': eggsConfig -> unphase = (int) strtol(options.arg, (char**) NULL, 10); break;
             case 'h': eggsConfig -> help = true; break;
             case 'p': eggsConfig -> unpolarize = (double) strtod(options.arg, (char**) NULL); break;
             case 's': eggsConfig -> pseudohap = true; break;

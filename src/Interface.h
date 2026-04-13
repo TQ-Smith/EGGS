@@ -17,7 +17,7 @@
 // Hold CLI parameters.
 typedef struct {
     // If records should be unphased.
-    bool unphase;
+    int unphase;
     // If biallelic records should be unpolarized.
     double unpolarize;
     // If records should be made into pseudohaps.

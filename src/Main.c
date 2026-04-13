@@ -17,6 +17,8 @@
 
 // Easy random uniform float with [0, 1)
 #define rand() ((float) rand() / (float) (RAND_MAX))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 // Convert if the genotype file is not packed.
 void convertToUnpacked(int fd, char* snpFile, gzFile fpOut) {
@@ -388,10 +390,14 @@ void print_record(Record_t* record, CompactBitset* mask, EggsConfig_t* eggsConfi
             // If genotypes should be unphased with a 50/50 chance.
             if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
                 record -> genotypes[i].isPhased = false;
-                if (rand() < 0.5) {
+                if (eggsConfig -> unphase == 1 && rand() < 0.5) {
                     tempInt = record -> genotypes[i].left;
                     record -> genotypes[i].left =  record -> genotypes[i].right;
                     record -> genotypes[i].right = tempInt;
+                } else {
+                    tempInt = MIN(record -> genotypes[i].left, record -> genotypes[i].right);
+                    record -> genotypes[i].right = MAX(record -> genotypes[i].left, record -> genotypes[i].right);
+                    record -> genotypes[i].left =  tempInt;
                 }
             }
 
@@ -491,10 +497,14 @@ void print_ms_replicate(Replicate_t* replicate, EggsConfig_t* eggsConfig, gzFile
             // If genotypes should be unphased with a 50/50 chance.
             if (eggsConfig -> unphase && !eggsConfig -> pseudohap) {
                 temp -> genotypes[i].isPhased = false;
-                if (rand() < 0.5) {
+                if (eggsConfig -> unphase == 1 && rand() < 0.5) {
                     tempInt = temp -> genotypes[i].left;
                     temp -> genotypes[i].left =  temp -> genotypes[i].right;
                     temp -> genotypes[i].right = tempInt;
+                } else {
+                    tempInt = MIN(temp -> genotypes[i].left, temp -> genotypes[i].right);
+                    temp -> genotypes[i].right = MAX(temp -> genotypes[i].left, temp -> genotypes[i].right);
+                    temp -> genotypes[i].left = tempInt;
                 }
             }
 
