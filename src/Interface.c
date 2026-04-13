@@ -14,7 +14,7 @@
 // Our help menu.
 void print_help() {
     fprintf(stderr, "\n");
-    fprintf(stderr, "EGGS v1.0.3\n");
+    fprintf(stderr, "EGGS v1.0.4\n");
     fprintf(stderr, "---------\n\n");
     fprintf(stderr, "Written by T. Quinn Smith\n");
     fprintf(stderr, "Principal Investigator: Zachary A. Szpiech\n");
@@ -212,6 +212,7 @@ EggsConfig_t* init_eggs_configuration(int argc, char *argv[]) {
         switch (c) {
             case 'e': eggsConfig -> eigenFiles = strdup(options.arg); break;
             case 'u': eggsConfig -> unphase = true; break;
+            case 'h': eggsConfig -> help = true; break;
             case 'p': eggsConfig -> unpolarize = (double) strtod(options.arg, (char**) NULL); break;
             case 's': eggsConfig -> pseudohap = true; break;
             case 'g': eggsConfig -> seqerr = (double) strtod(options.arg, (char**) NULL); break;
